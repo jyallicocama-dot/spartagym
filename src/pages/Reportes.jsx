@@ -121,66 +121,158 @@ const Reportes = () => {
     toast.success('¡Excel Descargado!', 'El reporte se ha exportado correctamente')
   }
 
-  // Función para descargar PDF (HTML imprimible)
+  // Función para descargar PDF (HTML imprimible profesional)
   const descargarPDF = () => {
     const ventana = window.open('', '_blank')
+    const logoUrl = window.location.origin + '/logoSparta.png'
     ventana.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Reporte Sparta Gym</title>
+        <title>Reporte Financiero - Sparta Gym</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-          h1 { color: #D4AF37; border-bottom: 2px solid #D4AF37; padding-bottom: 10px; }
-          h2 { color: #CD7F32; margin-top: 30px; }
-          .resumen { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
-          .resumen p { margin: 10px 0; font-size: 18px; }
-          .total { font-size: 24px; font-weight: bold; color: #D4AF37; }
-          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-          th { background: #D4AF37; color: #000; padding: 12px; text-align: left; }
-          td { padding: 10px; border-bottom: 1px solid #ddd; }
-          tr:hover { background: #f9f9f9; }
-          .footer { margin-top: 40px; text-align: center; color: #888; font-size: 12px; }
-          @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a1a2e; background: #fff; }
+          .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 30px 40px; display: flex; align-items: center; justify-content: space-between; }
+          .header-left { display: flex; align-items: center; gap: 20px; }
+          .logo { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #D4AF37; }
+          .header h1 { font-size: 28px; color: #D4AF37; margin: 0; letter-spacing: 2px; }
+          .header-right { text-align: right; }
+          .header-right p { color: #aaa; font-size: 12px; margin-bottom: 5px; }
+          .header-right .periodo { color: #fff; font-size: 14px; font-weight: 600; }
+          .content { padding: 40px; }
+          .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }
+          .summary-card { background: #f8f9fa; border-radius: 12px; padding: 20px; text-align: center; border-left: 4px solid #D4AF37; }
+          .summary-card.green { border-left-color: #28a745; }
+          .summary-card.blue { border-left-color: #007bff; }
+          .summary-card.purple { border-left-color: #6f42c1; }
+          .summary-card h3 { font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 1px; }
+          .summary-card .value { font-size: 24px; font-weight: 700; color: #1a1a2e; }
+          .section { margin-bottom: 40px; }
+          .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #e9ecef; }
+          .section-header h2 { font-size: 18px; color: #1a1a2e; font-weight: 600; }
+          .section-header .badge { background: #D4AF37; color: #000; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+          table { width: 100%; border-collapse: collapse; font-size: 13px; }
+          th { background: #1a1a2e; color: #D4AF37; padding: 14px 16px; text-align: left; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+          td { padding: 14px 16px; border-bottom: 1px solid #e9ecef; color: #333; }
+          tr:nth-child(even) { background: #f8f9fa; }
+          .badge-tipo { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+          .badge-mensual { background: #d4edda; color: #155724; }
+          .badge-diario { background: #cce5ff; color: #004085; }
+          .badge-trimestral { background: #e2d5f1; color: #4a235a; }
+          .monto { font-weight: 700; color: #D4AF37; }
+          .total-row { background: #1a1a2e !important; }
+          .total-row td { color: #fff; font-weight: 700; font-size: 14px; }
+          .total-row .monto { color: #D4AF37; font-size: 16px; }
+          .footer { background: #f8f9fa; padding: 20px 40px; text-align: center; border-top: 1px solid #e9ecef; margin-top: 40px; }
+          .footer p { color: #666; font-size: 11px; }
+          .no-data { text-align: center; padding: 40px; color: #999; font-style: italic; }
+          @media print { 
+            body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } 
+            .header { -webkit-print-color-adjust: exact; }
+          }
         </style>
       </head>
       <body>
-        <h1>🏛️ SPARTA GYM - Reporte</h1>
-        <p><strong>Período:</strong> ${fechaInicio} al ${fechaFin}</p>
-        
-        <div class="resumen">
-          <h2>📊 Resumen</h2>
-          <p>Ingresos por Membresías: <strong>S/ ${reporte.totalPagos.toFixed(2)}</strong></p>
-          <p>Ingresos por Productos: <strong>S/ ${reporte.totalVentas.toFixed(2)}</strong></p>
-          <p class="total">TOTAL GENERAL: S/ ${reporte.totalGeneral.toFixed(2)}</p>
+        <div class="header">
+          <div class="header-left">
+            <img src="${logoUrl}" alt="Sparta Gym" class="logo" onerror="this.style.display='none'"/>
+            <div>
+              <h1>SPARTA GYM</h1>
+              <p style="color: #aaa; margin-top: 4px;">Reporte Financiero</p>
+            </div>
+          </div>
+          <div class="header-right">
+            <p>Documento generado el</p>
+            <p class="periodo">${new Date().toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <p style="margin-top: 10px; color: #D4AF37; font-weight: 600;">Período: ${fechaInicio} al ${fechaFin}</p>
+          </div>
         </div>
+        
+        <div class="content">
+          <div class="summary-grid">
+            <div class="summary-card">
+              <h3>Total General</h3>
+              <div class="value">S/ ${reporte.totalGeneral.toFixed(2)}</div>
+            </div>
+            <div class="summary-card green">
+              <h3>Membresías</h3>
+              <div class="value">S/ ${reporte.totalPagos.toFixed(2)}</div>
+            </div>
+            <div class="summary-card blue">
+              <h3>Productos</h3>
+              <div class="value">S/ ${reporte.totalVentas.toFixed(2)}</div>
+            </div>
+            <div class="summary-card purple">
+              <h3>Transacciones</h3>
+              <div class="value">${reporte.pagos.length + reporte.ventas.length}</div>
+            </div>
+          </div>
 
-        <h2>💳 Detalle de Membresías (${reporte.pagos.length})</h2>
-        <table>
-          <thead><tr><th>Cliente</th><th>Tipo</th><th>Fecha</th><th>Monto</th></tr></thead>
-          <tbody>
-            ${reporte.pagos.map(p => `<tr><td>${p.clienteNombre}</td><td>${p.tipo}</td><td>${p.fecha}</td><td>S/ ${Number(p.monto).toFixed(2)}</td></tr>`).join('')}
-          </tbody>
-        </table>
+          <div class="section">
+            <div class="section-header">
+              <h2>Detalle de Membresías</h2>
+              <span class="badge">${reporte.pagos.length} registros</span>
+            </div>
+            ${reporte.pagos.length > 0 ? `
+            <table>
+              <thead><tr><th>Cliente</th><th>Tipo</th><th>Fecha</th><th style="text-align:right">Monto</th></tr></thead>
+              <tbody>
+                ${reporte.pagos.map(p => `
+                  <tr>
+                    <td>${p.clienteNombre}</td>
+                    <td><span class="badge-tipo badge-${p.tipo}">${p.tipo}</span></td>
+                    <td>${p.fecha}</td>
+                    <td style="text-align:right" class="monto">S/ ${Number(p.monto).toFixed(2)}</td>
+                  </tr>
+                `).join('')}
+                <tr class="total-row">
+                  <td colspan="3">SUBTOTAL MEMBRESÍAS</td>
+                  <td style="text-align:right" class="monto">S/ ${reporte.totalPagos.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+            ` : '<div class="no-data">No hay membresías en este período</div>'}
+          </div>
 
-        <h2>🛒 Detalle de Ventas (${reporte.ventas.length})</h2>
-        <table>
-          <thead><tr><th>Producto</th><th>Cantidad</th><th>Fecha</th><th>Total</th></tr></thead>
-          <tbody>
-            ${reporte.ventas.map(v => `<tr><td>${v.productoNombre}</td><td>${v.cantidad}</td><td>${v.fecha}</td><td>S/ ${Number(v.total).toFixed(2)}</td></tr>`).join('')}
-          </tbody>
-        </table>
+          <div class="section">
+            <div class="section-header">
+              <h2>Detalle de Ventas de Productos</h2>
+              <span class="badge">${reporte.ventas.length} registros</span>
+            </div>
+            ${reporte.ventas.length > 0 ? `
+            <table>
+              <thead><tr><th>Producto</th><th>Cantidad</th><th>Fecha</th><th style="text-align:right">Total</th></tr></thead>
+              <tbody>
+                ${reporte.ventas.map(v => `
+                  <tr>
+                    <td>${v.productoNombre}</td>
+                    <td>${v.cantidad} uds</td>
+                    <td>${v.fecha}</td>
+                    <td style="text-align:right" class="monto">S/ ${Number(v.total).toFixed(2)}</td>
+                  </tr>
+                `).join('')}
+                <tr class="total-row">
+                  <td colspan="3">SUBTOTAL PRODUCTOS</td>
+                  <td style="text-align:right" class="monto">S/ ${reporte.totalVentas.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+            ` : '<div class="no-data">No hay ventas en este período</div>'}
+          </div>
+        </div>
 
         <div class="footer">
-          <p>Generado el ${new Date().toLocaleString()} - Sparta Gym © ${new Date().getFullYear()}</p>
+          <p><strong>Sparta Gym</strong> | Sistema de Gestión | Documento generado automáticamente</p>
+          <p style="margin-top: 5px;">© ${new Date().getFullYear()} Todos los derechos reservados</p>
         </div>
         
-        <script>window.onload = function() { window.print(); }</script>
+        <script>window.onload = function() { setTimeout(() => window.print(), 500); }</script>
       </body>
       </html>
     `)
     ventana.document.close()
-    toast.success('¡PDF Generado!', 'Se abrió la ventana de impresión')
+    toast.success('¡Reporte Generado!', 'Se abrió la ventana de impresión')
   }
 
   return (

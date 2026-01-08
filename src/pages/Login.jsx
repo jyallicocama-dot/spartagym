@@ -41,8 +41,8 @@ const Login = () => {
       >
         <div className="card-sparta p-6">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-sparta-gold to-sparta-bronze rounded-full flex items-center justify-center">
-              <Shield className="w-8 h-8 text-sparta-darker" />
+            <div className="w-24 h-24 mx-auto mb-4 rounded-full overflow-hidden border-4 border-sparta-gold/50 shadow-lg shadow-sparta-gold/20">
+              <img src="/logoSparta.png" alt="Sparta Gym" className="w-full h-full object-cover" />
             </div>
             <h1 className="font-sparta text-2xl font-bold text-gradient">
               SPARTA GYM

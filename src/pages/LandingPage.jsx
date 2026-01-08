@@ -1,8 +1,11 @@
 import { motion } from 'framer-motion'
 import { Dumbbell, Users, Trophy, Clock, ChevronRight, Star, Zap, Target, Phone, Mail, MapPin } from 'lucide-react'
 import Scene3D from '../components/Scene3D'
+import { useData } from '../context/DataContext'
 
 const LandingPage = () => {
+  const { clientes } = useData()
+  const guerrerosActivos = clientes?.filter(c => c.estado === 'activo').length || 0
   const servicios = [
     { icon: Dumbbell, titulo: 'Musculación', descripcion: 'Equipos de última generación para construir el cuerpo de un guerrero espartano.' },
     { icon: Users, titulo: 'Clases Grupales', descripcion: 'Entrena con tu legión. CrossFit, Spinning, Boxeo y más.' },
@@ -13,7 +16,7 @@ const LandingPage = () => {
   const planes = [
     { 
       nombre: 'Diario', 
-      precio: 5, 
+      precio: 7, 
       periodo: 'día', 
       caracteristicas: ['Acceso por un día', 'Zona de pesas', 'Zona cardio', 'Vestuarios'],
       popular: false,
@@ -21,7 +24,7 @@ const LandingPage = () => {
     },
     { 
       nombre: 'Mensual', 
-      precio: 30, 
+      precio: 80, 
       periodo: 'mes', 
       caracteristicas: ['Acceso ilimitado', 'Todas las zonas', 'Clases grupales', 'Vestuarios'],
       popular: true,
@@ -29,7 +32,7 @@ const LandingPage = () => {
     },
     { 
       nombre: 'Trimestral', 
-      precio: 80, 
+      precio: 220, 
       periodo: '3 meses', 
       caracteristicas: ['Todo incluido', 'Mejor precio', 'Clases grupales', 'Casillero personal'],
       popular: false,
@@ -106,7 +109,7 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { numero: '500+', label: 'Guerreros Activos' },
+              { numero: `${guerrerosActivos}+`, label: 'Guerreros Activos' },
               { numero: '15+', label: 'Entrenadores Elite' },
               { numero: '2000m²', label: 'De Batalla' },
               { numero: '24/7', label: 'Siempre Abierto' },
@@ -348,7 +351,7 @@ const LandingPage = () => {
                 <Phone className="w-7 h-7 text-sparta-gold" />
               </div>
               <h3 className="font-semibold text-white mb-2">Teléfono</h3>
-              <p className="text-gray-400">+51 987 654 321</p>
+              <p className="text-gray-400">+51 937 264 655</p>
             </motion.div>
 
             <motion.div
@@ -362,7 +365,7 @@ const LandingPage = () => {
                 <Mail className="w-7 h-7 text-sparta-gold" />
               </div>
               <h3 className="font-semibold text-white mb-2">Email</h3>
-              <p className="text-gray-400">info@spartagym.pe</p>
+              <p className="text-gray-400">eduardoastetesaavedra8@gmail.com</p>
             </motion.div>
 
             <motion.div
@@ -376,7 +379,7 @@ const LandingPage = () => {
                 <MapPin className="w-7 h-7 text-sparta-gold" />
               </div>
               <h3 className="font-semibold text-white mb-2">Ubicación</h3>
-              <p className="text-gray-400">Av. Los Guerreros 300, Lima</p>
+              <p className="text-gray-400">Av. Calle Progreso, Herbay Alto</p>
             </motion.div>
           </div>
         </div>

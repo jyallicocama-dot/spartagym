@@ -53,7 +53,7 @@ const Intranet = () => {
 
   const accesosRapidos = [
     { titulo: 'Clientes', descripcion: 'Gestionar clientes', icon: Users, path: '/intranet/clientes', color: 'blue' },
-    { titulo: 'Pagos', descripcion: 'Registrar pagos', icon: CreditCard, path: '/intranet/pagos', color: 'green' },
+    { titulo: 'Suscripciones', descripcion: 'Gestionar membresías', icon: CreditCard, path: '/intranet/suscripciones', color: 'green' },
     { titulo: 'Productos', descripcion: 'Inventario y ventas', icon: Package, path: '/intranet/productos', color: 'purple' },
     { titulo: 'Reportes', descripcion: 'Ver estadísticas', icon: BarChart3, path: '/intranet/reportes', color: 'orange' },
   ]
@@ -136,9 +136,9 @@ const Intranet = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-sparta text-lg font-bold text-sparta-gold flex items-center gap-2">
                 <CreditCard className="w-5 h-5" />
-                Últimos Pagos
+                Últimas Suscripciones
               </h3>
-              <Link to="/intranet/pagos" className="text-sm text-sparta-gold hover:underline">
+              <Link to="/intranet/suscripciones" className="text-sm text-sparta-gold hover:underline">
                 Ver todos
               </Link>
             </div>

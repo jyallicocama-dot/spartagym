@@ -16,6 +16,7 @@ export const DataProvider = ({ children }) => {
   const [pagos, setPagos] = useState([])
   const [productos, setProductos] = useState([])
   const [ventas, setVentas] = useState([])
+  const [categorias, setCategorias] = useState([])
   const [loading, setLoading] = useState(true)
 
   // Cargar datos al iniciar
@@ -26,11 +27,12 @@ export const DataProvider = ({ children }) => {
   const cargarDatos = async () => {
     setLoading(true)
     try {
-      const [clientesRes, pagosRes, productosRes, ventasRes] = await Promise.all([
+      const [clientesRes, pagosRes, productosRes, ventasRes, categoriasRes] = await Promise.all([
         supabase.from('clientes').select('*').order('created_at', { ascending: false }),
         supabase.from('pagos').select('*, clientes(nombre)').order('fecha', { ascending: false }),
         supabase.from('productos').select('*').order('nombre'),
-        supabase.from('ventas').select('*, productos(nombre)').order('fecha', { ascending: false })
+        supabase.from('ventas').select('*, productos(nombre)').order('fecha', { ascending: false }),
+        supabase.from('categorias').select('*').order('nombre')
       ])
 
       if (clientesRes.data) setClientes(clientesRes.data.map(c => ({
@@ -51,6 +53,8 @@ export const DataProvider = ({ children }) => {
         productoNombre: v.productos?.nombre || 'Sin nombre',
         fecha: v.fecha?.split('T')[0]
       })))
+      
+      if (categoriasRes.data) setCategorias(categoriasRes.data)
     } catch (error) {
       console.error('Error cargando datos:', error)
     }
@@ -135,6 +139,42 @@ export const DataProvider = ({ children }) => {
     } catch (error) {
       console.error('Error agregando pago:', error)
       return null
+    }
+  }
+
+  const editarPago = async (id, datosActualizados) => {
+    try {
+      const { error } = await supabase
+        .from('pagos')
+        .update({
+          tipo: datosActualizados.tipo,
+          monto: datosActualizados.monto,
+          mes: datosActualizados.mes
+        })
+        .eq('id', id)
+
+      if (error) throw error
+      setPagos(pagos.map(p => p.id === id ? { ...p, ...datosActualizados } : p))
+      return true
+    } catch (error) {
+      console.error('Error editando pago:', error)
+      return false
+    }
+  }
+
+  const eliminarPago = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('pagos')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      setPagos(pagos.filter(p => p.id !== id))
+      return true
+    } catch (error) {
+      console.error('Error eliminando pago:', error)
+      return false
     }
   }
 
@@ -250,23 +290,105 @@ export const DataProvider = ({ children }) => {
     }
   }
 
+  // Funciones de categorías
+  const agregarCategoria = async (nombre) => {
+    try {
+      const { data, error } = await supabase
+        .from('categorias')
+        .insert([{ nombre }])
+        .select()
+        .single()
+
+      if (error) throw error
+      setCategorias([...categorias, data])
+      return data
+    } catch (error) {
+      console.error('Error agregando categoría:', error)
+      return null
+    }
+  }
+
+  const eliminarCategoria = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('categorias')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      setCategorias(categorias.filter(c => c.id !== id))
+      return true
+    } catch (error) {
+      console.error('Error eliminando categoría:', error)
+      return false
+    }
+  }
+
+  // Obtener productos con bajo stock
+  const getProductosBajoStock = () => {
+    return productos.filter(p => p.stock < 10)
+  }
+
+  // Obtener suscripciones por vencer (mensuales y trimestrales)
+  const getSuscripcionesPorVencer = () => {
+    const hoy = new Date()
+    const diasAviso = 5 // Avisar 5 días antes
+    
+    return pagos.filter(p => {
+      if (p.tipo === 'diario') return false
+      
+      const fechaPago = new Date(p.fecha)
+      let fechaVencimiento
+      
+      if (p.tipo === 'mensual') {
+        fechaVencimiento = new Date(fechaPago)
+        fechaVencimiento.setMonth(fechaVencimiento.getMonth() + 1)
+      } else if (p.tipo === 'trimestral') {
+        fechaVencimiento = new Date(fechaPago)
+        fechaVencimiento.setMonth(fechaVencimiento.getMonth() + 3)
+      }
+      
+      if (!fechaVencimiento) return false
+      
+      const diasRestantes = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24))
+      return diasRestantes >= 0 && diasRestantes <= diasAviso
+    }).map(p => {
+      const fechaPago = new Date(p.fecha)
+      let fechaVencimiento = new Date(fechaPago)
+      if (p.tipo === 'mensual') {
+        fechaVencimiento.setMonth(fechaVencimiento.getMonth() + 1)
+      } else {
+        fechaVencimiento.setMonth(fechaVencimiento.getMonth() + 3)
+      }
+      const diasRestantes = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24))
+      return { ...p, fechaVencimiento, diasRestantes }
+    })
+  }
+
   return (
     <DataContext.Provider value={{
       clientes,
       pagos,
       productos,
       ventas,
+      categorias,
       loading,
       cargarDatos,
       agregarCliente,
       editarCliente,
       eliminarCliente,
       agregarPago,
+      editarPago,
+      eliminarPago,
       agregarProducto,
       editarProducto,
       eliminarProducto,
       venderProducto,
-      obtenerReporte
+      obtenerReporte,
+      agregarCategoria,
+      eliminarCategoria,
+      getProductosBajoStock,
+      getSuscripcionesPorVencer
     }}>
       {children}
     </DataContext.Provider>

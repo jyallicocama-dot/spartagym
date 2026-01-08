@@ -1,19 +1,24 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CreditCard, Plus, Search, Calendar, DollarSign, X, Filter } from 'lucide-react'
+import { CreditCard, Plus, Search, Calendar, DollarSign, X, Filter, AlertTriangle, Clock, Edit, Trash2 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 
 const Suscripciones = () => {
-  const { clientes, pagos, agregarPago } = useData()
+  const { clientes, pagos, agregarPago, editarPago, eliminarPago, getSuscripcionesPorVencer } = useData()
   const toast = useToast()
+  const suscripcionesPorVencer = getSuscripcionesPorVencer()
+  const [mostrarAlertaVencer, setMostrarAlertaVencer] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('todos')
   const [modalAbierto, setModalAbierto] = useState(false)
+  const [modalConfirmar, setModalConfirmar] = useState(false)
+  const [pagoAEliminar, setPagoAEliminar] = useState(null)
+  const [pagoEditando, setPagoEditando] = useState(null)
   const [formData, setFormData] = useState({
     clienteId: '',
     tipo: 'mensual',
-    monto: 30,
+    monto: 80,
     mes: ''
   })
 
@@ -37,7 +42,7 @@ const Suscripciones = () => {
     setFormData({
       clienteId: clientes[0]?.id || '',
       tipo: 'mensual',
-      monto: 30,
+      monto: 80,
       mes: `${meses[new Date().getMonth()]} ${anioActual}`
     })
     setModalAbierto(true)
@@ -45,12 +50,38 @@ const Suscripciones = () => {
 
   const cerrarModal = () => {
     setModalAbierto(false)
+    setPagoEditando(null)
+  }
+
+  const abrirModalEditar = (pago) => {
+    setPagoEditando(pago)
+    setFormData({
+      clienteId: pago.cliente_id || pago.clienteId,
+      tipo: pago.tipo,
+      monto: pago.monto,
+      mes: pago.mes || ''
+    })
+    setModalAbierto(true)
+  }
+
+  const abrirConfirmacion = (pago) => {
+    setPagoAEliminar(pago)
+    setModalConfirmar(true)
+  }
+
+  const confirmarEliminacion = async () => {
+    const result = await eliminarPago(pagoAEliminar.id)
+    if (result) {
+      toast.success('¡Suscripción Eliminada!', `La suscripción ha sido eliminada`)
+    }
+    setModalConfirmar(false)
+    setPagoAEliminar(null)
   }
 
   const handleTipoChange = (tipo) => {
-    let monto = 5
-    if (tipo === 'mensual') monto = 30
-    if (tipo === 'trimestral') monto = 80
+    let monto = 7
+    if (tipo === 'mensual') monto = 80
+    if (tipo === 'trimestral') monto = 220
     
     setFormData({
       ...formData,
@@ -63,11 +94,21 @@ const Suscripciones = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     const cliente = clientes.find(c => c.id === formData.clienteId)
-    const resultado = await agregarPago(formData)
-    if (resultado) {
-      toast.success('¡Suscripción Registrada!', `${formData.tipo} de S/${formData.monto} para ${cliente?.nombre || 'cliente'}`)
+    
+    if (pagoEditando) {
+      const resultado = await editarPago(pagoEditando.id, formData)
+      if (resultado) {
+        toast.success('¡Suscripción Actualizada!', `${formData.tipo} de S/${formData.monto} actualizada`)
+      } else {
+        toast.error('Error', 'No se pudo actualizar la suscripción')
+      }
     } else {
-      toast.error('Error', 'No se pudo registrar la suscripción')
+      const resultado = await agregarPago(formData)
+      if (resultado) {
+        toast.success('¡Suscripción Registrada!', `${formData.tipo} de S/${formData.monto} para ${cliente?.nombre || 'cliente'}`)
+      } else {
+        toast.error('Error', 'No se pudo registrar la suscripción')
+      }
     }
     cerrarModal()
   }
@@ -75,6 +116,52 @@ const Suscripciones = () => {
   return (
     <div className="min-h-screen pt-20 pb-8 px-4">
       <div className="max-w-7xl mx-auto">
+        {/* Alerta de Suscripciones por Vencer */}
+        <AnimatePresence>
+          {suscripcionesPorVencer.length > 0 && mostrarAlertaVencer && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="fixed right-4 top-20 w-80 z-40"
+            >
+              <div className="card-sparta p-4 border-l-4 border-orange-500 bg-orange-500/10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-orange-500" />
+                    <h4 className="font-semibold text-orange-500">Por Vencer ({suscripcionesPorVencer.length})</h4>
+                  </div>
+                  <button 
+                    onClick={() => setMostrarAlertaVencer(false)}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {suscripcionesPorVencer.slice(0, 5).map((s, i) => (
+                    <div key={i} className="flex justify-between items-center text-sm">
+                      <span className="text-gray-300 truncate">{s.clienteNombre}</span>
+                      <span className="text-orange-400 font-semibold">
+                        {s.diasRestantes === 0 ? 'Hoy' : `${s.diasRestantes} días`}
+                      </span>
+                    </div>
+                  ))}
+                  {suscripcionesPorVencer.length > 5 && (
+                    <p className="text-xs text-gray-500">+{suscripcionesPorVencer.length - 5} más...</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setMostrarAlertaVencer(false)}
+                  className="w-full mt-3 py-2 bg-orange-500/20 text-orange-400 rounded hover:bg-orange-500/30 transition-colors text-sm font-medium"
+                >
+                  Aceptar
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -220,15 +307,16 @@ const Suscripciones = () => {
           transition={{ delay: 0.3 }}
           className="card-sparta overflow-hidden"
         >
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
             <table className="table-sparta">
-              <thead>
+              <thead className="sticky top-0 bg-sparta-dark z-10">
                 <tr>
                   <th>Cliente</th>
                   <th>Tipo</th>
                   <th>Periodo</th>
                   <th>Fecha</th>
                   <th>Monto</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -256,10 +344,28 @@ const Suscripciones = () => {
                     <td className="text-gray-300">{item.mes || 'Pase diario'}</td>
                     <td className="text-gray-300">{item.fecha}</td>
                     <td className="text-sparta-gold font-bold">S/ {Number(item.monto).toFixed(2)}</td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => abrirModalEditar(item)}
+                          className="p-2 bg-blue-500/20 text-blue-500 rounded hover:bg-blue-500/30 transition-colors"
+                          title="Editar"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => abrirConfirmacion(item)}
+                          className="p-2 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={5} className="text-center py-8 text-gray-400">
+                    <td colSpan={6} className="text-center py-8 text-gray-400">
                       No se encontraron suscripciones
                     </td>
                   </tr>
@@ -288,7 +394,7 @@ const Suscripciones = () => {
               >
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="font-sparta text-xl font-bold text-sparta-gold">
-                    Nueva Suscripción
+                    {pagoEditando ? 'Editar Suscripción' : 'Nueva Suscripción'}
                   </h2>
                   <button onClick={cerrarModal} className="text-gray-400 hover:text-white">
                     <X className="w-6 h-6" />
@@ -329,7 +435,7 @@ const Suscripciones = () => {
                         <p className={`font-semibold text-sm ${formData.tipo === 'diario' ? 'text-sparta-gold' : 'text-gray-400'}`}>
                           Diario
                         </p>
-                        <p className="text-xs text-gray-500">S/ 5</p>
+                        <p className="text-xs text-gray-500">S/ 7</p>
                       </button>
                       <button
                         type="button"
@@ -344,7 +450,7 @@ const Suscripciones = () => {
                         <p className={`font-semibold text-sm ${formData.tipo === 'mensual' ? 'text-sparta-gold' : 'text-gray-400'}`}>
                           Mensual
                         </p>
-                        <p className="text-xs text-gray-500">S/ 30</p>
+                        <p className="text-xs text-gray-500">S/ 80</p>
                       </button>
                       <button
                         type="button"
@@ -359,7 +465,7 @@ const Suscripciones = () => {
                         <p className={`font-semibold text-sm ${formData.tipo === 'trimestral' ? 'text-sparta-gold' : 'text-gray-400'}`}>
                           Trimestral
                         </p>
-                        <p className="text-xs text-gray-500">S/ 80</p>
+                        <p className="text-xs text-gray-500">S/ 220</p>
                       </button>
                     </div>
                   </div>
@@ -407,10 +513,57 @@ const Suscripciones = () => {
                       type="submit"
                       className="flex-1 sparta-button"
                     >
-                      Registrar
+                      {pagoEditando ? 'Guardar Cambios' : 'Registrar'}
                     </button>
                   </div>
                 </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal Confirmación Eliminar */}
+        <AnimatePresence>
+          {modalConfirmar && pagoAEliminar && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="modal-overlay"
+              onClick={() => setModalConfirmar(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="modal-content max-w-sm"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-red-500/20 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="w-8 h-8 text-red-500" />
+                  </div>
+                  <h2 className="font-sparta text-xl font-bold text-white mb-2">
+                    Confirmar Eliminación
+                  </h2>
+                  <p className="text-gray-400 mb-6">
+                    ¿Estás seguro de eliminar la suscripción de <span className="text-white font-semibold">"{pagoAEliminar.clienteNombre}"</span>?
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setModalConfirmar(false)}
+                      className="flex-1 py-3 border border-gray-600 text-gray-400 rounded hover:bg-gray-800 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={confirmarEliminacion}
+                      className="flex-1 py-3 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
               </motion.div>
             </motion.div>
           )}

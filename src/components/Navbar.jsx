@@ -57,11 +57,11 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center space-x-3">
             <motion.div
-              whileHover={{ rotate: 360 }}
-              transition={{ duration: 0.5 }}
-              className="w-10 h-10 bg-gradient-to-br from-sparta-gold to-sparta-bronze rounded-full flex items-center justify-center"
+              whileHover={{ scale: 1.1 }}
+              transition={{ duration: 0.3 }}
+              className="w-12 h-12 rounded-full overflow-hidden border-2 border-sparta-gold/50"
             >
-              <Shield className="w-6 h-6 text-sparta-darker" />
+              <img src="/logoSparta.png" alt="Sparta Gym" className="w-full h-full object-cover" />
             </motion.div>
             <span className="font-sparta text-xl font-bold text-gradient">SPARTA GYM</span>
           </Link>

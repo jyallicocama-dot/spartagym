@@ -1,19 +1,27 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Package, Plus, Search, Edit, Trash2, X, ShoppingCart, AlertTriangle } from 'lucide-react'
+import { Package, Plus, Search, Edit, Trash2, X, ShoppingCart, AlertTriangle, Tag, Settings } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 
 const Productos = () => {
-  const { productos, ventas, agregarProducto, editarProducto, eliminarProducto, venderProducto } = useData()
+  const { productos, ventas, categorias, agregarProducto, editarProducto, eliminarProducto, venderProducto, agregarCategoria: agregarCategoriaDB, eliminarCategoria, getProductosBajoStock } = useData()
   const toast = useToast()
+  const productosBajoStock = getProductosBajoStock()
+  const [mostrarAlertaStock, setMostrarAlertaStock] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('todas')
   const [modalProducto, setModalProducto] = useState(false)
   const [modalVenta, setModalVenta] = useState(false)
+  const [modalCategoria, setModalCategoria] = useState(false)
+  const [modalGestionCategorias, setModalGestionCategorias] = useState(false)
+  const [modalConfirmar, setModalConfirmar] = useState(false)
+  const [itemAEliminar, setItemAEliminar] = useState(null)
+  const [tipoEliminar, setTipoEliminar] = useState('')
   const [productoEditando, setProductoEditando] = useState(null)
   const [productoVenta, setProductoVenta] = useState(null)
   const [cantidadVenta, setCantidadVenta] = useState(1)
+  const [nuevaCategoria, setNuevaCategoria] = useState('')
   const [formData, setFormData] = useState({
     nombre: '',
     precio: '',
@@ -21,7 +29,11 @@ const Productos = () => {
     categoria: 'Bebidas'
   })
 
-  const categorias = ['Bebidas', 'Suplementos', 'Snacks', 'Accesorios']
+  // Categorías desde BD + las que existan en productos
+  const categoriasBase = ['Bebidas', 'Suplementos', 'Snacks', 'Accesorios']
+  const categoriasDB = categorias?.map(c => c.nombre) || []
+  const categoriasProductos = [...new Set(productos.map(p => p.categoria).filter(Boolean))]
+  const todasCategorias = [...new Set([...categoriasBase, ...categoriasDB, ...categoriasProductos])]
 
   const productosFiltrados = productos.filter(p => {
     const matchBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
@@ -59,8 +71,35 @@ const Productos = () => {
   const cerrarModales = () => {
     setModalProducto(false)
     setModalVenta(false)
+    setModalCategoria(false)
     setProductoEditando(null)
     setProductoVenta(null)
+    setNuevaCategoria('')
+  }
+
+  const handleAgregarCategoria = async () => {
+    if (nuevaCategoria.trim() && !todasCategorias.includes(nuevaCategoria.trim())) {
+      const result = await agregarCategoriaDB(nuevaCategoria.trim())
+      if (result) {
+        setFormData({ ...formData, categoria: nuevaCategoria.trim() })
+        toast.success('¡Categoría creada!', `${nuevaCategoria.trim()} guardada en la base de datos`)
+      } else {
+        setFormData({ ...formData, categoria: nuevaCategoria.trim() })
+        toast.info('Categoría temporal', `${nuevaCategoria.trim()} disponible para este producto`)
+      }
+      setModalCategoria(false)
+      setNuevaCategoria('')
+    }
+  }
+
+  const handleEliminarCategoria = async (catNombre) => {
+    const cat = categorias?.find(c => c.nombre === catNombre)
+    if (cat) {
+      const result = await eliminarCategoria(cat.id)
+      if (result) {
+        toast.success('¡Categoría eliminada!', `${catNombre} ha sido eliminada`)
+      }
+    }
   }
 
   const handleSubmitProducto = async (e) => {
@@ -98,17 +137,77 @@ const Productos = () => {
     }
   }
 
-  const handleEliminar = async (id) => {
-    const producto = productos.find(p => p.id === id)
-    if (window.confirm('¿Estás seguro de eliminar este producto?')) {
-      await eliminarProducto(id)
-      toast.success('¡Producto Eliminado!', `${producto?.nombre} ha sido eliminado del inventario`)
+  const abrirConfirmacion = (item, tipo) => {
+    setItemAEliminar(item)
+    setTipoEliminar(tipo)
+    setModalConfirmar(true)
+  }
+
+  const confirmarEliminacion = async () => {
+    if (tipoEliminar === 'producto') {
+      await eliminarProducto(itemAEliminar.id)
+      toast.success('¡Producto Eliminado!', `${itemAEliminar?.nombre} ha sido eliminado del inventario`)
+    } else if (tipoEliminar === 'categoria') {
+      const cat = categorias?.find(c => c.nombre === itemAEliminar)
+      if (cat) {
+        const result = await eliminarCategoria(cat.id)
+        if (result) {
+          toast.success('¡Categoría Eliminada!', `${itemAEliminar} ha sido eliminada`)
+        }
+      }
     }
+    setModalConfirmar(false)
+    setItemAEliminar(null)
+    setTipoEliminar('')
   }
 
   return (
     <div className="min-h-screen pt-20 pb-8 px-4">
       <div className="max-w-7xl mx-auto">
+        {/* Alerta de Stock Bajo */}
+        <AnimatePresence>
+          {productosBajoStock.length > 0 && mostrarAlertaStock && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="fixed right-4 top-20 w-80 z-40"
+            >
+              <div className="card-sparta p-4 border-l-4 border-red-500 bg-red-500/10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-500" />
+                    <h4 className="font-semibold text-red-500">Stock Bajo ({productosBajoStock.length})</h4>
+                  </div>
+                  <button 
+                    onClick={() => setMostrarAlertaStock(false)}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {productosBajoStock.slice(0, 5).map(p => (
+                    <div key={p.id} className="flex justify-between items-center text-sm">
+                      <span className="text-gray-300 truncate">{p.nombre}</span>
+                      <span className="text-red-400 font-semibold">{p.stock} uds</span>
+                    </div>
+                  ))}
+                  {productosBajoStock.length > 5 && (
+                    <p className="text-xs text-gray-500">+{productosBajoStock.length - 5} más...</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setMostrarAlertaStock(false)}
+                  className="w-full mt-3 py-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors text-sm font-medium"
+                >
+                  Aceptar
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -203,7 +302,7 @@ const Productos = () => {
             />
           </div>
           
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
             <button
               onClick={() => setFiltroCategoria('todas')}
               className={`px-4 py-2 rounded-lg transition-all ${
@@ -214,7 +313,7 @@ const Productos = () => {
             >
               Todas
             </button>
-            {categorias.map(cat => (
+            {todasCategorias.map(cat => (
               <button
                 key={cat}
                 onClick={() => setFiltroCategoria(cat)}
@@ -227,6 +326,13 @@ const Productos = () => {
                 {cat}
               </button>
             ))}
+            <button
+              onClick={() => setModalGestionCategorias(true)}
+              className="p-2 bg-sparta-gold/20 text-sparta-gold rounded-lg hover:bg-sparta-gold/30 transition-colors"
+              title="Gestionar categorías"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
           </div>
         </motion.div>
 
@@ -290,7 +396,7 @@ const Productos = () => {
                   <Edit className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => handleEliminar(producto.id)}
+                  onClick={() => abrirConfirmacion(producto, 'producto')}
                   className="p-2 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -413,16 +519,26 @@ const Productos = () => {
 
                   <div>
                     <label className="block text-sm text-gray-400 mb-2">Categoría</label>
-                    <select
-                      value={formData.categoria}
-                      onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
-                      className="input-sparta"
-                      required
-                    >
-                      {categorias.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <select
+                        value={formData.categoria}
+                        onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                        className="input-sparta flex-1"
+                        required
+                      >
+                        {todasCategorias.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setModalCategoria(true)}
+                        className="px-3 py-2 bg-sparta-gold/20 text-sparta-gold rounded hover:bg-sparta-gold/30 transition-colors"
+                        title="Nueva categoría"
+                      >
+                        <Tag className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex gap-3 pt-4">
@@ -517,6 +633,183 @@ const Productos = () => {
                     </button>
                   </div>
                 </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal Nueva Categoría */}
+        <AnimatePresence>
+          {modalCategoria && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="modal-overlay"
+              onClick={() => setModalCategoria(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="modal-content max-w-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="font-sparta text-xl font-bold text-sparta-gold">
+                    Nueva Categoría
+                  </h2>
+                  <button onClick={() => setModalCategoria(false)} className="text-gray-400 hover:text-white">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Nombre de la categoría</label>
+                    <input
+                      type="text"
+                      value={nuevaCategoria}
+                      onChange={(e) => setNuevaCategoria(e.target.value)}
+                      className="input-sparta"
+                      placeholder="Ej: Ropa deportiva"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setModalCategoria(false)}
+                      className="flex-1 py-3 border border-gray-600 text-gray-400 rounded hover:bg-gray-800 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleAgregarCategoria}
+                      disabled={!nuevaCategoria.trim()}
+                      className="flex-1 sparta-button disabled:opacity-50"
+                    >
+                      Crear Categoría
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal Confirmación Eliminar */}
+        <AnimatePresence>
+          {modalConfirmar && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="modal-overlay"
+              onClick={() => setModalConfirmar(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="modal-content max-w-sm"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-red-500/20 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="w-8 h-8 text-red-500" />
+                  </div>
+                  <h2 className="font-sparta text-xl font-bold text-white mb-2">
+                    Confirmar Eliminación
+                  </h2>
+                  <p className="text-gray-400 mb-6">
+                    ¿Estás seguro de eliminar {tipoEliminar === 'producto' ? `"${itemAEliminar?.nombre}"` : `la categoría "${itemAEliminar}"`}?
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setModalConfirmar(false)}
+                      className="flex-1 py-3 border border-gray-600 text-gray-400 rounded hover:bg-gray-800 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={confirmarEliminacion}
+                      className="flex-1 py-3 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal Gestión de Categorías */}
+        <AnimatePresence>
+          {modalGestionCategorias && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="modal-overlay"
+              onClick={() => setModalGestionCategorias(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="modal-content"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="font-sparta text-xl font-bold text-sparta-gold">
+                    Gestionar Categorías
+                  </h2>
+                  <button onClick={() => setModalGestionCategorias(false)} className="text-gray-400 hover:text-white">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-64 overflow-y-auto mb-4">
+                  {categorias && categorias.length > 0 ? (
+                    categorias.map(cat => (
+                      <div key={cat.id} className="flex items-center justify-between p-3 bg-sparta-darker rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Tag className="w-4 h-4 text-sparta-gold" />
+                          <span className="text-white">{cat.nombre}</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setModalGestionCategorias(false)
+                            abrirConfirmacion(cat.nombre, 'categoria')
+                          }}
+                          className="p-2 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-center text-gray-500 py-4">No hay categorías personalizadas</p>
+                  )}
+                </div>
+
+                <p className="text-xs text-gray-500 mb-4">
+                  * Las categorías base (Bebidas, Suplementos, Snacks, Accesorios) no se pueden eliminar
+                </p>
+
+                <button
+                  onClick={() => {
+                    setModalGestionCategorias(false)
+                    setModalCategoria(true)
+                  }}
+                  className="w-full sparta-button flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  Nueva Categoría
+                </button>
               </motion.div>
             </motion.div>
           )}
