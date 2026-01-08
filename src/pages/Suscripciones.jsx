@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CreditCard, Plus, Search, Calendar, DollarSign, X, Filter, AlertTriangle, Clock, Edit, Trash2 } from 'lucide-react'
+import { CreditCard, Plus, Search, Calendar, DollarSign, X, Filter, AlertTriangle, Clock, Edit, Trash2, RefreshCw } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 
@@ -15,6 +15,9 @@ const Suscripciones = () => {
   const [modalConfirmar, setModalConfirmar] = useState(false)
   const [pagoAEliminar, setPagoAEliminar] = useState(null)
   const [pagoEditando, setPagoEditando] = useState(null)
+  const [modalRenovar, setModalRenovar] = useState(false)
+  const [suscripcionRenovar, setSuscripcionRenovar] = useState(null)
+  const [tipoRenovacion, setTipoRenovacion] = useState('mensual')
   const [formData, setFormData] = useState({
     clienteId: '',
     tipo: 'mensual',
@@ -74,6 +77,107 @@ const Suscripciones = () => {
     if (result) {
       toast.success('¡Suscripción Eliminada!', `La suscripción ha sido eliminada`)
     }
+    setModalConfirmar(false)
+    setPagoAEliminar(null)
+  }
+
+  // Calcular fecha de vencimiento para una suscripción específica
+  const getFechaVencimiento = (pago) => {
+    if (pago.tipo === 'diario') return null
+    
+    const diasPorTipo = { mensual: 30, trimestral: 90 }
+    const clienteId = pago.cliente_id || pago.clienteId
+    
+    // Obtener todas las suscripciones del cliente ordenadas por fecha
+    const suscripcionesCliente = pagos
+      .filter(p => (p.cliente_id === clienteId || p.clienteId === clienteId) && p.tipo !== 'diario')
+      .sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
+    
+    if (suscripcionesCliente.length === 0) return null
+    
+    // Encontrar el índice de esta suscripción
+    const indexActual = suscripcionesCliente.findIndex(s => s.id === pago.id)
+    if (indexActual === -1) return null
+    
+    // Calcular vencimiento acumulativo hasta esta suscripción
+    let fechaVenc = new Date(suscripcionesCliente[0].fecha)
+    fechaVenc.setDate(fechaVenc.getDate() + diasPorTipo[suscripcionesCliente[0].tipo])
+    
+    for (let i = 1; i <= indexActual; i++) {
+      const p = suscripcionesCliente[i]
+      const fechaPago = new Date(p.fecha)
+      const diasNuevos = diasPorTipo[p.tipo]
+      
+      if (fechaVenc > fechaPago) {
+        // Renovó antes de vencer: sumar días al vencimiento actual
+        fechaVenc.setDate(fechaVenc.getDate() + diasNuevos)
+      } else {
+        // Ya había vencido: calcular desde fecha del nuevo pago
+        fechaVenc = new Date(fechaPago)
+        fechaVenc.setDate(fechaVenc.getDate() + diasNuevos)
+      }
+    }
+    
+    return fechaVenc
+  }
+  
+  // Obtener vencimiento total del cliente (para el modal de renovar)
+  const getFechaVencimientoCliente = (clienteId) => {
+    const suscripcionesCliente = pagos
+      .filter(p => (p.cliente_id === clienteId || p.clienteId === clienteId) && p.tipo !== 'diario')
+      .sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
+    
+    if (suscripcionesCliente.length === 0) return null
+    return getFechaVencimiento(suscripcionesCliente[suscripcionesCliente.length - 1])
+  }
+
+  // Abrir modal de renovar
+  const abrirModalRenovar = (pago) => {
+    setSuscripcionRenovar(pago)
+    setTipoRenovacion(pago.tipo)
+    setModalRenovar(true)
+  }
+
+  // Renovar suscripción (respeta días restantes)
+  const handleRenovar = async () => {
+    if (!suscripcionRenovar) return
+    
+    const montos = { diario: 7, mensual: 80, trimestral: 220 }
+    const diasPorTipo = { diario: 1, mensual: 30, trimestral: 90 }
+    
+    // Calcular fecha de vencimiento actual
+    const fechaVencActual = getFechaVencimiento(suscripcionRenovar)
+    const hoy = new Date()
+    
+    // Si aún no vence, calcular días restantes
+    let diasRestantes = 0
+    if (fechaVencActual && fechaVencActual > hoy) {
+      diasRestantes = Math.ceil((fechaVencActual - hoy) / (1000 * 60 * 60 * 24))
+    }
+    
+    // Nueva fecha = hoy + días del nuevo plan + días restantes
+    const diasNuevoPlan = diasPorTipo[tipoRenovacion]
+    const nuevaFechaVenc = new Date()
+    nuevaFechaVenc.setDate(nuevaFechaVenc.getDate() + diasNuevoPlan + diasRestantes)
+    
+    const mesActual = `${meses[new Date().getMonth()]} ${anioActual}`
+    
+    const resultado = await agregarPago({
+      clienteId: suscripcionRenovar.cliente_id || suscripcionRenovar.clienteId,
+      tipo: tipoRenovacion,
+      monto: montos[tipoRenovacion],
+      mes: tipoRenovacion !== 'diario' ? mesActual : null
+    })
+    
+    if (resultado) {
+      toast.success('¡Suscripción Renovada!', 
+        diasRestantes > 0 
+          ? `Se agregaron ${diasNuevoPlan} días + ${diasRestantes} días restantes`
+          : `Plan ${tipoRenovacion} - S/${montos[tipoRenovacion]}`
+      )
+    }
+    setModalRenovar(false)
+    setSuscripcionRenovar(null)
     setModalConfirmar(false)
     setPagoAEliminar(null)
   }
@@ -313,21 +417,31 @@ const Suscripciones = () => {
                 <tr>
                   <th>Cliente</th>
                   <th>Tipo</th>
-                  <th>Periodo</th>
-                  <th>Fecha</th>
+                  <th>Fecha Pago</th>
+                  <th>Vence</th>
                   <th>Monto</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {suscripcionesFiltradas.length > 0 ? suscripcionesFiltradas.map((item) => (
+                {suscripcionesFiltradas.length > 0 ? suscripcionesFiltradas.map((item) => {
+                  const fechaVenc = getFechaVencimiento(item)
+                  const hoy = new Date()
+                  const vencido = fechaVenc && fechaVenc < hoy
+                  
+                  return (
                   <tr key={item.id}>
                     <td>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-sparta-gold/20 rounded-full flex items-center justify-center">
                           <CreditCard className="w-5 h-5 text-sparta-gold" />
                         </div>
-                        <span className="font-medium text-white">{item.clienteNombre}</span>
+                        <div>
+                          <p className="font-medium text-white">{item.clienteNombre}</p>
+                          {item.clienteEmail && (
+                            <p className="text-xs text-gray-400">{item.clienteEmail}</p>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td>
@@ -341,11 +455,28 @@ const Suscripciones = () => {
                         {item.tipo}
                       </span>
                     </td>
-                    <td className="text-gray-300">{item.mes || 'Pase diario'}</td>
                     <td className="text-gray-300">{item.fecha}</td>
+                    <td>
+                      {fechaVenc ? (
+                        <span className={`text-sm font-medium ${vencido ? 'text-red-500' : 'text-green-500'}`}>
+                          {fechaVenc.toLocaleDateString('es-PE')}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">-</span>
+                      )}
+                    </td>
                     <td className="text-sparta-gold font-bold">S/ {Number(item.monto).toFixed(2)}</td>
                     <td>
                       <div className="flex gap-2">
+                        {item.tipo !== 'diario' && (
+                          <button
+                            onClick={() => abrirModalRenovar(item)}
+                            className="p-2 bg-green-500/20 text-green-500 rounded hover:bg-green-500/30 transition-colors"
+                            title="Renovar suscripción"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => abrirModalEditar(item)}
                           className="p-2 bg-blue-500/20 text-blue-500 rounded hover:bg-blue-500/30 transition-colors"
@@ -363,7 +494,7 @@ const Suscripciones = () => {
                       </div>
                     </td>
                   </tr>
-                )) : (
+                )}) : (
                   <tr>
                     <td colSpan={6} className="text-center py-8 text-gray-400">
                       No se encontraron suscripciones
@@ -561,6 +692,92 @@ const Suscripciones = () => {
                       className="flex-1 py-3 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
                     >
                       Eliminar
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal Renovar Suscripción */}
+        <AnimatePresence>
+          {modalRenovar && suscripcionRenovar && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="modal-overlay"
+              onClick={() => setModalRenovar(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="modal-content max-w-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="font-sparta text-xl font-bold text-sparta-gold">
+                    Renovar Suscripción
+                  </h2>
+                  <button onClick={() => setModalRenovar(false)} className="text-gray-400 hover:text-white">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="card-sparta p-4 bg-sparta-darker">
+                    <p className="text-white font-semibold">{suscripcionRenovar.clienteNombre}</p>
+                    <p className="text-sm text-gray-400">
+                      Vence: {getFechaVencimiento(suscripcionRenovar)?.toLocaleDateString('es-PE') || '-'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Tipo de Suscripción</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { tipo: 'mensual', precio: 80, label: 'Mensual', dias: 30 },
+                        { tipo: 'trimestral', precio: 220, label: 'Trimestral', dias: 90 }
+                      ].map(plan => (
+                        <button
+                          key={plan.tipo}
+                          type="button"
+                          onClick={() => setTipoRenovacion(plan.tipo)}
+                          className={`p-3 rounded-lg border-2 transition-all text-center ${
+                            tipoRenovacion === plan.tipo
+                              ? 'border-sparta-gold bg-sparta-gold/10'
+                              : 'border-gray-700 hover:border-gray-600'
+                          }`}
+                        >
+                          <p className={`font-semibold text-sm ${tipoRenovacion === plan.tipo ? 'text-sparta-gold' : 'text-gray-400'}`}>
+                            {plan.label}
+                          </p>
+                          <p className="text-xs text-gray-500">S/ {plan.precio} - {plan.dias} días</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-500">
+                    * Si la suscripción aún no vence, los días restantes se sumarán al nuevo plan
+                  </p>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setModalRenovar(false)}
+                      className="flex-1 py-3 border border-gray-600 text-gray-400 rounded hover:bg-gray-800 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleRenovar}
+                      className="flex-1 sparta-button flex items-center justify-center gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Renovar
                     </button>
                   </div>
                 </div>

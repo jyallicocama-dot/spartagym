@@ -29,7 +29,7 @@ export const DataProvider = ({ children }) => {
     try {
       const [clientesRes, pagosRes, productosRes, ventasRes, categoriasRes] = await Promise.all([
         supabase.from('clientes').select('*').order('created_at', { ascending: false }),
-        supabase.from('pagos').select('*, clientes(nombre)').order('fecha', { ascending: false }),
+        supabase.from('pagos').select('*, clientes(nombre, email)').order('fecha', { ascending: false }),
         supabase.from('productos').select('*').order('nombre'),
         supabase.from('ventas').select('*, productos(nombre)').order('fecha', { ascending: false }),
         supabase.from('categorias').select('*').order('nombre')
@@ -43,6 +43,7 @@ export const DataProvider = ({ children }) => {
       if (pagosRes.data) setPagos(pagosRes.data.map(p => ({
         ...p,
         clienteNombre: p.clientes?.nombre || 'Sin nombre',
+        clienteEmail: p.clientes?.email || '',
         fecha: p.fecha?.split('T')[0]
       })))
       
