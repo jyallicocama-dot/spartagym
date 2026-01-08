@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: #0d0d0d;
+  color: #fff;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D4AF37;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #CD7F32;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #D4AF37 0%, #CD7F32 50%, #D4AF37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.bg-gradient-sparta {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+}
+
+.border-gradient {
+  border-image: linear-gradient(135deg, #D4AF37, #CD7F32) 1;
+}
+
+.glass-effect {
+  background: rgba(26, 26, 26, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.sparta-button {
+  background: linear-gradient(135deg, #D4AF37 0%, #CD7F32 100%);
+  color: #0d0d0d;
+  font-weight: 600;
+  padding: 12px 32px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.sparta-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(212, 175, 55, 0.4);
+}
+
+.card-sparta {
+  background: linear-gradient(145deg, #1a1a1a 0%, #252525 100%);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.card-sparta:hover {
+  border-color: #D4AF37;
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.2);
+  transform: translateY(-5px);
+}
+
+.input-sparta {
+  background: #1a1a1a;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.input-sparta:focus {
+  outline: none;
+  border-color: #D4AF37;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.input-sparta::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.table-sparta {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-sparta th {
+  background: linear-gradient(135deg, #D4AF37 0%, #CD7F32 100%);
+  color: #0d0d0d;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.85rem;
+}
+
+.table-sparta td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+.table-sparta tr:hover {
+  background: rgba(212, 175, 55, 0.05);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal-content {
+  background: #1a1a1a;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
