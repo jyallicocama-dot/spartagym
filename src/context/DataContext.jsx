@@ -64,12 +64,17 @@ export const DataProvider = ({ children }) => {
 
   const agregarCliente = async (cliente) => {
     try {
+      // Nombre y teléfono son obligatorios
+      if (!cliente.nombre?.trim() || !cliente.telefono?.trim()) {
+        throw new Error('Nombre y teléfono son obligatorios')
+      }
+      
       const { data, error } = await supabase
         .from('clientes')
         .insert([{
-          nombre: cliente.nombre?.trim() || null,
+          nombre: cliente.nombre.trim(),
+          telefono: cliente.telefono.trim(),
           dni: cliente.dni?.trim() || null,
-          telefono: cliente.telefono?.trim() || null,
           email: cliente.email?.trim() || null,
           estado: 'activo'
         }])
