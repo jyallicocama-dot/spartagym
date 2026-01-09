@@ -67,10 +67,10 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await supabase
         .from('clientes')
         .insert([{
-          nombre: cliente.nombre,
-          dni: cliente.dni,
-          telefono: cliente.telefono,
-          email: cliente.email,
+          nombre: cliente.nombre?.trim() || null,
+          dni: cliente.dni?.trim() || null,
+          telefono: cliente.telefono?.trim() || null,
+          email: cliente.email?.trim() || null,
           estado: 'activo'
         }])
         .select()
@@ -89,13 +89,20 @@ export const DataProvider = ({ children }) => {
 
   const editarCliente = async (id, datosActualizados) => {
     try {
+      // Limpiar datos: convertir strings vacíos a null
+      const datosLimpios = {}
+      for (const key in datosActualizados) {
+        const val = datosActualizados[key]
+        datosLimpios[key] = typeof val === 'string' && val.trim() === '' ? null : val
+      }
+      
       const { error } = await supabase
         .from('clientes')
-        .update(datosActualizados)
+        .update(datosLimpios)
         .eq('id', id)
 
       if (error) throw error
-      setClientes(clientes.map(c => c.id === id ? { ...c, ...datosActualizados } : c))
+      setClientes(clientes.map(c => c.id === id ? { ...c, ...datosLimpios } : c))
     } catch (error) {
       console.error('Error editando cliente:', error)
     }
