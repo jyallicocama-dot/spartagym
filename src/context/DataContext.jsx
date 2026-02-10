@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from './AuthContext'
 
 const DataContext = createContext()
 
@@ -19,42 +20,56 @@ export const DataProvider = ({ children }) => {
   const [categorias, setCategorias] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Cargar datos al iniciar
+  const { user } = useAuth()
+
+  // Cargar datos cuando el usuario cambie o inicie sesión
   useEffect(() => {
-    cargarDatos()
-  }, [])
+    if (user) {
+      cargarDatos()
+    } else {
+      // Limpiar datos si no hay usuario
+      setClientes([])
+      setPagos([])
+      setProductos([])
+      setVentas([])
+      setCategorias([])
+      setLoading(false)
+    }
+  }, [user])
 
   const cargarDatos = async () => {
+    if (!user) return
     setLoading(true)
     try {
       const [clientesRes, pagosRes, productosRes, ventasRes, categoriasRes] = await Promise.all([
-        supabase.from('clientes').select('*').order('created_at', { ascending: false }),
-        supabase.from('pagos').select('*, clientes(nombre, email)').order('fecha', { ascending: false }),
-        supabase.from('productos').select('*').order('nombre'),
-        supabase.from('ventas').select('*, productos(nombre)').order('fecha', { ascending: false }),
-        supabase.from('categorias').select('*').order('nombre')
+        supabase.from('clientes').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('pagos').select('*, clientes(nombre, email)').eq('user_id', user.id).order('fecha', { ascending: false }),
+        supabase.from('productos').select('*').eq('user_id', user.id).order('nombre'),
+        supabase.from('ventas').select('*, productos(nombre), clientes(nombre)').eq('user_id', user.id).order('fecha', { ascending: false }),
+        supabase.from('categorias').select('*').eq('user_id', user.id).order('nombre')
       ])
 
       if (clientesRes.data) setClientes(clientesRes.data.map(c => ({
         ...c,
         fechaRegistro: c.fecha_registro?.split('T')[0] || c.created_at?.split('T')[0]
       })))
-      
+
       if (pagosRes.data) setPagos(pagosRes.data.map(p => ({
         ...p,
         clienteNombre: p.clientes?.nombre || 'Sin nombre',
         clienteEmail: p.clientes?.email || '',
         fecha: p.fecha?.split('T')[0]
       })))
-      
+
       if (productosRes.data) setProductos(productosRes.data)
-      
+
       if (ventasRes.data) setVentas(ventasRes.data.map(v => ({
         ...v,
         productoNombre: v.productos?.nombre || 'Sin nombre',
+        clienteNombre: v.clientes?.nombre || 'General',
         fecha: v.fecha?.split('T')[0]
       })))
-      
+
       if (categoriasRes.data) setCategorias(categoriasRes.data)
     } catch (error) {
       console.error('Error cargando datos:', error)
@@ -68,7 +83,7 @@ export const DataProvider = ({ children }) => {
       if (!cliente.nombre?.trim() || !cliente.telefono?.trim()) {
         throw new Error('Nombre y teléfono son obligatorios')
       }
-      
+
       const { data, error } = await supabase
         .from('clientes')
         .insert([{
@@ -76,13 +91,14 @@ export const DataProvider = ({ children }) => {
           telefono: cliente.telefono.trim(),
           dni: cliente.dni?.trim() || null,
           email: cliente.email?.trim() || null,
-          estado: 'activo'
+          estado: 'activo',
+          user_id: user.id
         }])
         .select()
         .single()
 
       if (error) throw error
-      
+
       const nuevoCliente = { ...data, fechaRegistro: data.created_at?.split('T')[0] }
       setClientes([nuevoCliente, ...clientes])
       return nuevoCliente
@@ -100,7 +116,7 @@ export const DataProvider = ({ children }) => {
         const val = datosActualizados[key]
         datosLimpios[key] = typeof val === 'string' && val.trim() === '' ? null : val
       }
-      
+
       const { error } = await supabase
         .from('clientes')
         .update(datosLimpios)
@@ -135,13 +151,14 @@ export const DataProvider = ({ children }) => {
           cliente_id: pago.clienteId,
           tipo: pago.tipo,
           monto: pago.monto,
-          mes: pago.mes
+          mes: pago.mes,
+          user_id: user.id
         }])
         .select('*, clientes(nombre)')
         .single()
 
       if (error) throw error
-      
+
       const nuevoPago = {
         ...data,
         clienteNombre: data.clientes?.nombre || 'Cliente',
@@ -195,7 +212,7 @@ export const DataProvider = ({ children }) => {
     try {
       const { data, error } = await supabase
         .from('productos')
-        .insert([producto])
+        .insert([{ ...producto, user_id: user.id }])
         .select()
         .single()
 
@@ -236,7 +253,7 @@ export const DataProvider = ({ children }) => {
     }
   }
 
-  const venderProducto = async (productoId, cantidad) => {
+  const venderProducto = async (productoId, cantidad, clienteId = null, metodoPago = 'efectivo') => {
     const producto = productos.find(p => p.id === productoId)
     if (!producto || producto.stock < cantidad) return null
 
@@ -250,26 +267,32 @@ export const DataProvider = ({ children }) => {
       if (stockError) throw stockError
 
       // Registrar venta
+      const estadoPago = metodoPago === 'fiado' ? 'pendiente' : 'pagado'
       const { data, error: ventaError } = await supabase
         .from('ventas')
         .insert([{
           producto_id: productoId,
+          cliente_id: clienteId,
           cantidad,
           precio_unitario: producto.precio,
-          total: producto.precio * cantidad
+          total: producto.precio * cantidad,
+          metodo_pago: metodoPago,
+          estado_pago: estadoPago,
+          user_id: user.id
         }])
-        .select('*, productos(nombre)')
+        .select('*, productos(nombre), clientes(nombre)')
         .single()
 
       if (ventaError) throw ventaError
 
-      setProductos(productos.map(p => 
+      setProductos(productos.map(p =>
         p.id === productoId ? { ...p, stock: p.stock - cantidad } : p
       ))
 
       const nuevaVenta = {
         ...data,
         productoNombre: data.productos?.nombre || producto.nombre,
+        clienteNombre: data.clientes?.nombre || 'General',
         fecha: data.fecha?.split('T')[0]
       }
       setVentas([nuevaVenta, ...ventas])
@@ -277,6 +300,68 @@ export const DataProvider = ({ children }) => {
     } catch (error) {
       console.error('Error en venta:', error)
       return null
+    }
+  }
+
+  const pagarDeuda = async (ventaId, montoAPagar, metodoPago = 'efectivo') => {
+    try {
+      // 1. Obtener la venta
+      const venta = ventas.find(v => v.id === ventaId)
+      if (!venta) throw new Error('Venta no encontrada')
+
+      const nuevoMontoPagado = (Number(venta.monto_pagado) || 0) + Number(montoAPagar)
+      const esPagoTotal = nuevoMontoPagado >= Number(venta.total)
+      const estadoFinal = esPagoTotal ? 'pagado' : 'pendiente'
+
+      // 2. Registrar el pago
+      const notaAbono = esPagoTotal
+        ? `Cancelación total: ${venta.productoNombre}`
+        : `Abono a cuenta: ${venta.productoNombre} (Saldo rest: S/ ${(Number(venta.total) - nuevoMontoPagado).toFixed(2)})`
+
+      const { data: pagoData, error: pagoError } = await supabase
+        .from('pagos')
+        .insert([{
+          cliente_id: venta.cliente_id,
+          tipo: 'producto',
+          monto: Number(montoAPagar),
+          metodo_pago: metodoPago,
+          notas: notaAbono,
+          user_id: user.id
+        }])
+        .select('*, clientes(nombre)')
+        .single()
+
+      if (pagoError) throw pagoError
+
+      // 3. Actualizar la venta
+      const { error: ventaError } = await supabase
+        .from('ventas')
+        .update({
+          estado_pago: estadoFinal,
+          monto_pagado: nuevoMontoPagado
+        })
+        .eq('id', ventaId)
+
+      if (ventaError) throw ventaError
+
+      // 4. Actualizar estado local
+      setVentas(ventas.map(v => v.id === ventaId ? {
+        ...v,
+        estado_pago: estadoFinal,
+        monto_pagado: nuevoMontoPagado
+      } : v))
+
+      const nuevoPago = {
+        ...pagoData,
+        clienteNombre: pagoData.clientes?.nombre || 'Cliente',
+        fecha: pagoData.fecha?.split('T')[0]
+      }
+      setPagos([nuevoPago, ...pagos])
+
+      return true
+    } catch (error) {
+      console.error('Error pagando deuda:', error)
+      return false
     }
   }
 
@@ -291,14 +376,35 @@ export const DataProvider = ({ children }) => {
       return fecha >= new Date(fechaInicio) && fecha <= new Date(fechaFin)
     })
 
-    const totalPagos = pagosEnRango.reduce((acc, p) => acc + Number(p.monto), 0)
-    const totalVentas = ventasEnRango.reduce((acc, v) => acc + Number(v.total), 0)
+    // Separar cobros
+    const pagosMembresias = pagosEnRango.filter(p => p.tipo !== 'producto')
+    const pagosProductos = pagosEnRango.filter(p => p.tipo === 'producto')
+
+    // Ingresos por Membresías (Mensuales, Diarios, etc)
+    const totalPagos = pagosMembresias.reduce((acc, p) => acc + Number(p.monto), 0)
+
+    // Ingresos por Productos = Ventas en Efectivo + Cobros de Deudas Fiado
+    const totalVentasEfectivo = ventasEnRango
+      .filter(v => v.metodo_pago === 'efectivo')
+      .reduce((acc, v) => acc + Number(v.total), 0)
+    const totalAbonosProductos = pagosProductos.reduce((acc, p) => acc + Number(p.monto), 0)
+
+    const totalVentas = totalVentasEfectivo + totalAbonosProductos
+
+    // Deudas Generadas (Total de ventas marcadas como fiado en este periodo)
+    const totalFiadoGenerado = ventasEnRango
+      .filter(v => v.metodo_pago === 'fiado')
+      .reduce((acc, v) => acc + Number(v.total), 0)
 
     return {
-      pagos: pagosEnRango,
+      pagos: pagosMembresias,
+      pagosProductos: pagosProductos,
       ventas: ventasEnRango,
       totalPagos,
       totalVentas,
+      totalVentasEfectivo,
+      totalAbonosProductos,
+      totalFiadoGenerado,
       totalGeneral: totalPagos + totalVentas
     }
   }
@@ -308,7 +414,7 @@ export const DataProvider = ({ children }) => {
     try {
       const { data, error } = await supabase
         .from('categorias')
-        .insert([{ nombre }])
+        .insert([{ nombre, user_id: user.id }])
         .select()
         .single()
 
@@ -346,13 +452,13 @@ export const DataProvider = ({ children }) => {
   const getSuscripcionesPorVencer = () => {
     const hoy = new Date()
     const diasAviso = 5 // Avisar 5 días antes
-    
+
     return pagos.filter(p => {
       if (p.tipo === 'diario') return false
-      
+
       const fechaPago = new Date(p.fecha)
       let fechaVencimiento
-      
+
       if (p.tipo === 'mensual') {
         fechaVencimiento = new Date(fechaPago)
         fechaVencimiento.setMonth(fechaVencimiento.getMonth() + 1)
@@ -360,9 +466,9 @@ export const DataProvider = ({ children }) => {
         fechaVencimiento = new Date(fechaPago)
         fechaVencimiento.setMonth(fechaVencimiento.getMonth() + 3)
       }
-      
+
       if (!fechaVencimiento) return false
-      
+
       const diasRestantes = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24))
       return diasRestantes >= 0 && diasRestantes <= diasAviso
     }).map(p => {
@@ -397,6 +503,7 @@ export const DataProvider = ({ children }) => {
       editarProducto,
       eliminarProducto,
       venderProducto,
+      pagarDeuda,
       obtenerReporte,
       agregarCategoria,
       eliminarCategoria,

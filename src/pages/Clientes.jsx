@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Users, Search, Edit, X, UserPlus, Phone, AlertTriangle, UserCheck, UserX } from 'lucide-react'
+import { Users, Search, Edit, X, UserPlus, Phone, AlertTriangle, UserCheck, UserX, CreditCard, DollarSign } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 const Clientes = () => {
-  const { clientes, agregarCliente, editarCliente } = useData()
+  const { clientes, ventas, pagarDeuda, editarCliente, agregarCliente } = useData()
   const toast = useToast()
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [modalAbierto, setModalAbierto] = useState(false)
+  const [modalDeudas, setModalDeudas] = useState(false)
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
   const [clienteEditando, setClienteEditando] = useState(null)
   const [formData, setFormData] = useState({
     nombre: '',
@@ -16,6 +18,16 @@ const Clientes = () => {
     telefono: '',
     email: ''
   })
+
+  const getDeudaTotal = (clienteId) => {
+    return ventas
+      .filter(v => v.cliente_id === clienteId && v.estado_pago === 'pendiente')
+      .reduce((acc, v) => acc + v.total, 0)
+  }
+
+  const getVentasPendientes = (clienteId) => {
+    return ventas.filter(v => v.cliente_id === clienteId && v.estado_pago === 'pendiente')
+  }
 
   const clientesFiltrados = clientes.filter(c => {
     const matchBusqueda = c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -42,9 +54,16 @@ const Clientes = () => {
     setModalAbierto(true)
   }
 
+  const abrirModalDeudas = (cliente) => {
+    setClienteSeleccionado(cliente)
+    setModalDeudas(true)
+  }
+
   const cerrarModal = () => {
     setModalAbierto(false)
+    setModalDeudas(false)
     setClienteEditando(null)
+    setClienteSeleccionado(null)
     setFormData({ nombre: '', dni: '', telefono: '', email: '' })
   }
 
@@ -70,6 +89,18 @@ const Clientes = () => {
     toast.success('¡Estado Actualizado!', `${cliente.nombre} ahora está ${nuevoEstado}`)
   }
 
+  const handlePagarDeuda = async (ventaId) => {
+    const ok = await pagarDeuda(ventaId)
+    if (ok) {
+      toast.success('¡Pago Registrado!', 'La deuda ha sido cancelada y registrada en ingresos')
+      if (getVentasPendientes(clienteSeleccionado.id).length === 1) {
+        setModalDeudas(false)
+      }
+    } else {
+      toast.error('Error', 'No se pudo registrar el pago')
+    }
+  }
+
   return (
     <div className="min-h-screen pt-20 pb-8 px-4">
       <div className="max-w-7xl mx-auto">
@@ -86,7 +117,7 @@ const Clientes = () => {
             </h1>
             <p className="text-gray-400">Administra los guerreros de Sparta Gym</p>
           </div>
-          
+
           <button
             onClick={abrirModalNuevo}
             className="sparta-button flex items-center gap-2"
@@ -116,32 +147,29 @@ const Clientes = () => {
           <div className="flex gap-2">
             <button
               onClick={() => setFiltroEstado('todos')}
-              className={`px-4 py-2 rounded-lg transition-all ${
-                filtroEstado === 'todos' 
-                  ? 'bg-sparta-gold text-sparta-darker' 
-                  : 'bg-sparta-dark text-gray-400 hover:text-white'
-              }`}
+              className={`px-4 py-2 rounded-lg transition-all ${filtroEstado === 'todos'
+                ? 'bg-sparta-gold text-sparta-darker'
+                : 'bg-sparta-dark text-gray-400 hover:text-white'
+                }`}
             >
               Todos
             </button>
             <button
               onClick={() => setFiltroEstado('activo')}
-              className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                filtroEstado === 'activo' 
-                  ? 'bg-green-500 text-white' 
-                  : 'bg-sparta-dark text-gray-400 hover:text-white'
-              }`}
+              className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${filtroEstado === 'activo'
+                ? 'bg-green-500 text-white'
+                : 'bg-sparta-dark text-gray-400 hover:text-white'
+                }`}
             >
               <UserCheck className="w-4 h-4" />
               Activos
             </button>
             <button
               onClick={() => setFiltroEstado('inactivo')}
-              className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                filtroEstado === 'inactivo' 
-                  ? 'bg-red-500 text-white' 
-                  : 'bg-sparta-dark text-gray-400 hover:text-white'
-              }`}
+              className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${filtroEstado === 'inactivo'
+                ? 'bg-red-500 text-white'
+                : 'bg-sparta-dark text-gray-400 hover:text-white'
+                }`}
             >
               <UserX className="w-4 h-4" />
               Inactivos
@@ -194,7 +222,7 @@ const Clientes = () => {
                   <th>Cliente</th>
                   <th>DNI</th>
                   <th>Contacto</th>
-                  <th>Registro</th>
+                  <th>Saldo Pendiente</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
@@ -220,13 +248,18 @@ const Clientes = () => {
                         {cliente.telefono}
                       </div>
                     </td>
-                    <td className="text-gray-300">{cliente.fechaRegistro}</td>
                     <td>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        cliente.estado === 'activo' 
-                          ? 'bg-green-500/20 text-green-500' 
-                          : 'bg-red-500/20 text-red-500'
-                      }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-bold ${getDeudaTotal(cliente.id) > 0 ? 'text-orange-500' : 'text-green-500'}`}>
+                          S/ {getDeudaTotal(cliente.id).toFixed(2)}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${cliente.estado === 'activo'
+                        ? 'bg-green-500/20 text-green-500'
+                        : 'bg-red-500/20 text-red-500'
+                        }`}>
                         {cliente.estado}
                       </span>
                     </td>
@@ -368,7 +401,66 @@ const Clientes = () => {
           )}
         </AnimatePresence>
 
-        </div>
+        {/* Modal Deudas */}
+        <AnimatePresence>
+          {modalDeudas && clienteSeleccionado && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="modal-overlay"
+              onClick={cerrarModal}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="modal-content max-w-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="font-sparta text-xl font-bold text-orange-500">
+                      Deudas de {clienteSeleccionado.nombre}
+                    </h2>
+                    <p className="text-sm text-gray-400">Selecciona una venta para registrar su pago</p>
+                  </div>
+                  <button onClick={cerrarModal} className="text-gray-400 hover:text-white">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 max-h-[400px] overflow-y-auto mb-6 pr-2">
+                  {getVentasPendientes(clienteSeleccionado.id).map(venta => (
+                    <div key={venta.id} className="card-sparta p-4 border-gray-700 bg-sparta-darker flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-white">{venta.productoNombre}</p>
+                        <p className="text-xs text-gray-400">{venta.fecha} - {venta.cantidad} unidad(es)</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <p className="text-xl font-bold text-orange-500">S/ {venta.total.toFixed(2)}</p>
+                        <button
+                          onClick={() => handlePagarDeuda(venta.id)}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors font-bold text-sm"
+                        >
+                          <DollarSign className="w-4 h-4" />
+                          COBRAR
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-4 bg-orange-500/10 border-t border-orange-500 flex justify-between items-center rounded-b-lg">
+                  <span className="text-gray-300 font-bold text-lg">TOTAL DEUDA:</span>
+                  <span className="text-3xl font-bold text-orange-500">S/ {getDeudaTotal(clienteSeleccionado.id).toFixed(2)}</span>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+      </div>
     </div>
   )
 }

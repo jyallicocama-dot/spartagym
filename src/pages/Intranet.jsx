@@ -21,31 +21,31 @@ const Intranet = () => {
   const productosStock = productos.reduce((acc, p) => acc + p.stock, 0)
 
   const stats = [
-    { 
-      titulo: 'Ingresos Hoy', 
-      valor: `S/ ${totalHoy.toFixed(2)}`, 
-      icon: DollarSign, 
+    {
+      titulo: 'Ingresos Hoy',
+      valor: `S/ ${totalHoy.toFixed(2)}`,
+      icon: DollarSign,
       color: 'from-green-500 to-emerald-600',
       subtitulo: `Pagos: S/${pagosHoy} | Ventas: S/${ventasHoy}`
     },
-    { 
-      titulo: 'Ingresos del Mes', 
-      valor: `S/ ${totalMes.toFixed(2)}`, 
-      icon: TrendingUp, 
+    {
+      titulo: 'Ingresos del Mes',
+      valor: `S/ ${totalMes.toFixed(2)}`,
+      icon: TrendingUp,
       color: 'from-sparta-gold to-sparta-bronze',
       subtitulo: `Pagos: S/${pagosMes} | Ventas: S/${ventasMes}`
     },
-    { 
-      titulo: 'Clientes Activos', 
-      valor: clientesActivos, 
-      icon: Users, 
+    {
+      titulo: 'Clientes Activos',
+      valor: clientesActivos,
+      icon: Users,
       color: 'from-blue-500 to-indigo-600',
       subtitulo: `${clientes.length} registrados en total`
     },
-    { 
-      titulo: 'Stock Productos', 
-      valor: productosStock, 
-      icon: Package, 
+    {
+      titulo: 'Stock Productos',
+      valor: productosStock,
+      icon: Package,
       color: 'from-purple-500 to-pink-600',
       subtitulo: `${productos.length} productos diferentes`
     },
@@ -55,6 +55,7 @@ const Intranet = () => {
     { titulo: 'Clientes', descripcion: 'Gestionar clientes', icon: Users, path: '/intranet/clientes', color: 'blue' },
     { titulo: 'Suscripciones', descripcion: 'Gestionar membresías', icon: CreditCard, path: '/intranet/suscripciones', color: 'green' },
     { titulo: 'Productos', descripcion: 'Inventario y ventas', icon: Package, path: '/intranet/productos', color: 'purple' },
+    { titulo: 'Fiados', descripcion: 'Cobrar deudas', icon: DollarSign, path: '/intranet/deudas', color: 'orange' },
     { titulo: 'Reportes', descripcion: 'Ver estadísticas', icon: BarChart3, path: '/intranet/reportes', color: 'orange' },
   ]
 

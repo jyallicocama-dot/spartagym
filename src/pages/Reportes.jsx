@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { BarChart3, Calendar, DollarSign, TrendingUp, Download, Filter, FileSpreadsheet, FileText } from 'lucide-react'
+import { BarChart3, Calendar, DollarSign, TrendingUp, Download, Filter, FileSpreadsheet, FileText, AlertTriangle } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts'
@@ -8,14 +8,15 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const Reportes = () => {
   const { pagos, ventas, clientes, obtenerReporte } = useData()
   const toast = useToast()
-  
+
   const hoy = new Date()
   const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0]
   const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0]
-  
+
   const [fechaInicio, setFechaInicio] = useState(primerDiaMes)
   const [fechaFin, setFechaFin] = useState(ultimoDiaMes)
   const [tipoReporte, setTipoReporte] = useState('general')
+  const [filtroVenta, setFiltroVenta] = useState('todos')
 
   const reporte = useMemo(() => obtenerReporte(fechaInicio, fechaFin), [fechaInicio, fechaFin, pagos, ventas])
 
@@ -23,19 +24,37 @@ const Reportes = () => {
 
   const datosBarras = useMemo(() => {
     const datos = {}
-    
+
+    // Pagos de membresías (ya vienen filtrados)
     reporte.pagos.forEach(p => {
       const fecha = p.fecha
-      if (!datos[fecha]) datos[fecha] = { fecha, pagos: 0, ventas: 0 }
+      if (!datos[fecha]) datos[fecha] = { fecha, pagos: 0, ventas: 0, fiados: 0 }
       datos[fecha].pagos += p.monto
     })
-    
-    reporte.ventas.forEach(v => {
+
+    // Ventas en efectivo
+    reporte.ventas.filter(v => v.metodo_pago === 'efectivo').forEach(v => {
       const fecha = v.fecha
-      if (!datos[fecha]) datos[fecha] = { fecha, pagos: 0, ventas: 0 }
+      if (!datos[fecha]) datos[fecha] = { fecha, pagos: 0, ventas: 0, fiados: 0 }
       datos[fecha].ventas += v.total
     })
-    
+
+    // Abonos de deudas (Pagos tipo producto)
+    if (reporte.pagosProductos) {
+      reporte.pagosProductos.forEach(p => {
+        const fecha = p.fecha
+        if (!datos[fecha]) datos[fecha] = { fecha, pagos: 0, ventas: 0, fiados: 0 }
+        datos[fecha].ventas += p.monto
+      })
+    }
+
+    // Fiados Generados (Deuda creada)
+    reporte.ventas.filter(v => v.metodo_pago === 'fiado').forEach(v => {
+      const fecha = v.fecha
+      if (!datos[fecha]) datos[fecha] = { fecha, pagos: 0, ventas: 0, fiados: 0 }
+      datos[fecha].fiados += v.total
+    })
+
     return Object.values(datos).sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
   }, [reporte])
 
@@ -48,11 +67,11 @@ const Reportes = () => {
   const ventasPorCategoria = useMemo(() => {
     const categorias = {}
     reporte.ventas.forEach(v => {
-      const categoria = v.productoNombre.includes('Agua') || v.productoNombre.includes('Bebida') 
-        ? 'Bebidas' 
+      const categoria = v.productoNombre.includes('Agua') || v.productoNombre.includes('Bebida')
+        ? 'Bebidas'
         : v.productoNombre.includes('Proteína') || v.productoNombre.includes('Creatina')
-        ? 'Suplementos'
-        : 'Otros'
+          ? 'Suplementos'
+          : 'Otros'
       if (!categorias[categoria]) categorias[categoria] = 0
       categorias[categoria] += v.total
     })
@@ -62,7 +81,7 @@ const Reportes = () => {
   const setPreset = (preset) => {
     const hoy = new Date()
     let inicio, fin
-    
+
     switch (preset) {
       case 'hoy':
         inicio = fin = hoy.toISOString().split('T')[0]
@@ -84,7 +103,7 @@ const Reportes = () => {
       default:
         return
     }
-    
+
     setFechaInicio(inicio)
     setFechaFin(fin)
   }
@@ -93,25 +112,35 @@ const Reportes = () => {
   const descargarExcel = () => {
     let csv = 'REPORTE SPARTA GYM\n'
     csv += `Período: ${fechaInicio} al ${fechaFin}\n\n`
-    
+
     // Resumen
-    csv += 'RESUMEN\n'
+    csv += 'RESUMEN DE CAJA\n'
     csv += `Total Membresías,S/ ${reporte.totalPagos.toFixed(2)}\n`
-    csv += `Total Ventas Productos,S/ ${reporte.totalVentas.toFixed(2)}\n`
-    csv += `TOTAL GENERAL,S/ ${reporte.totalGeneral.toFixed(2)}\n\n`
-    
+    csv += `Total Ventas (Efectivo),S/ ${(reporte.totalVentasEfectivo || 0).toFixed(2)}\n`
+    csv += `Total Cobros (Deudas),S/ ${(reporte.totalAbonosProductos || 0).toFixed(2)}\n`
+    csv += `TOTAL RECIBIDO (CAJA),S/ ${reporte.totalGeneral.toFixed(2)}\n`
+    csv += `TOTAL FIADOS GENERADOS (DEUDA),S/ ${(reporte.totalFiadoGenerado || 0).toFixed(2)}\n\n`
+
     // Detalle Pagos
     csv += 'DETALLE DE MEMBRESÍAS\n'
     csv += 'Cliente,Tipo,Fecha,Monto\n'
     reporte.pagos.forEach(p => {
       csv += `${p.clienteNombre},${p.tipo},${p.fecha},${p.monto}\n`
     })
-    
-    csv += '\nDETALLE DE VENTAS\n'
-    csv += 'Producto,Cantidad,Fecha,Total\n'
+
+    csv += '\nDETALLE DE MOVIMIENTO DE PRODUCTOS\n'
+    csv += 'Producto,Cantidad,Fecha,Metodo,Total\n'
     reporte.ventas.forEach(v => {
-      csv += `${v.productoNombre},${v.cantidad},${v.fecha},${v.total}\n`
+      csv += `${v.productoNombre},${v.cantidad},${v.fecha},${v.metodo_pago.toUpperCase()},${v.total}\n`
     })
+
+    if (reporte.pagosProductos?.length > 0) {
+      csv += '\nCOBROS DE DEUDAS (FIADOS)\n'
+      csv += 'Cliente,Nota,Fecha,Monto Pago\n'
+      reporte.pagosProductos.forEach(p => {
+        csv += `${p.clienteNombre},${p.notas || 'Cobro Fiado'},${p.fecha},${p.monto}\n`
+      })
+    }
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
@@ -192,7 +221,7 @@ const Reportes = () => {
         <div class="content">
           <div class="summary-grid">
             <div class="summary-card">
-              <h3>Total General</h3>
+              <h3>Dinero en Caja</h3>
               <div class="value">S/ ${reporte.totalGeneral.toFixed(2)}</div>
             </div>
             <div class="summary-card green">
@@ -200,12 +229,12 @@ const Reportes = () => {
               <div class="value">S/ ${reporte.totalPagos.toFixed(2)}</div>
             </div>
             <div class="summary-card blue">
-              <h3>Productos</h3>
+              <h3>Ventas (Caja)</h3>
               <div class="value">S/ ${reporte.totalVentas.toFixed(2)}</div>
             </div>
-            <div class="summary-card purple">
-              <h3>Transacciones</h3>
-              <div class="value">${reporte.pagos.length + reporte.ventas.length}</div>
+            <div class="summary-card purple" style="border-left-color: #FF5733;">
+              <h3>Fiados (Deuda)</h3>
+              <div class="value">S/ ${(reporte.totalFiadoGenerado || 0).toFixed(2)}</div>
             </div>
           </div>
 
@@ -237,28 +266,68 @@ const Reportes = () => {
 
           <div class="section">
             <div class="section-header">
-              <h2>Detalle de Ventas de Productos</h2>
+              <h2>Detalle de Movimiento de Productos</h2>
               <span class="badge">${reporte.ventas.length} registros</span>
             </div>
             ${reporte.ventas.length > 0 ? `
             <table>
-              <thead><tr><th>Producto</th><th>Cantidad</th><th>Fecha</th><th style="text-align:right">Total</th></tr></thead>
+              <thead><tr><th>Producto</th><th>Cant.</th><th>Fecha</th><th>Método</th><th style="text-align:right">Total</th></tr></thead>
               <tbody>
                 ${reporte.ventas.map(v => `
                   <tr>
                     <td>${v.productoNombre}</td>
-                    <td>${v.cantidad} uds</td>
+                    <td>${v.cantidad}</td>
                     <td>${v.fecha}</td>
+                    <td><span class="badge-tipo" style="background: ${v.metodo_pago === 'fiado' ? '#fff3e0' : '#e8f5e9'}; color: ${v.metodo_pago === 'fiado' ? '#e65100' : '#2e7d32'};">${v.metodo_pago.toUpperCase()}</span></td>
                     <td style="text-align:right" class="monto">S/ ${Number(v.total).toFixed(2)}</td>
                   </tr>
                 `).join('')}
+              </tbody>
+            </table>
+            ` : '<div class="no-data">No hay movimientos en este período</div>'}
+          </div>
+
+          ${reporte.pagosProductos?.length > 0 ? `
+          <div class="section">
+            <div class="section-header">
+              <h2>Cobros de Deudas (Fiados)</h2>
+              <span class="badge">${reporte.pagosProductos.length} registros</span>
+            </div>
+            <table>
+              <thead><tr><th>Cliente</th><th>Nota</th><th>Fecha</th><th style="text-align:right">Monto Pago</th></tr></thead>
+              <tbody>
+                ${reporte.pagosProductos.map(p => `
+                  <tr>
+                    <td>${p.clienteNombre}</td>
+                    <td style="font-style: italic; color: #666;">${p.notas || 'Cobro de Fiado'}</td>
+                    <td>${p.fecha}</td>
+                    <td style="text-align:right" class="monto">S/ ${Number(p.monto).toFixed(2)}</td>
+                  </tr>
+                `).join('')}
                 <tr class="total-row">
-                  <td colspan="3">SUBTOTAL PRODUCTOS</td>
-                  <td style="text-align:right" class="monto">S/ ${reporte.totalVentas.toFixed(2)}</td>
+                  <td colspan="3">TOTAL COBROS FIADOS</td>
+                  <td style="text-align:right" class="monto">S/ ${reporte.pagosProductos.reduce((acc, p) => acc + Number(p.monto), 0).toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>
-            ` : '<div class="no-data">No hay ventas en este período</div>'}
+          </div>
+          ` : ''}
+
+          <div style="margin-top: 50px; border-top: 2px solid #1a1a2e; padding-top: 20px; text-align: right;">
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; color: #666; font-size: 14px;">
+                <span>Ventas Directas (Efectivo):</span>
+                <span>S/ ${(reporte.totalVentasEfectivo || 0).toFixed(2)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; color: #666; font-size: 14px;">
+                <span>Cobros de Fiados:</span>
+                <span>S/ ${(reporte.totalAbonosProductos || 0).toFixed(2)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;">
+                <h2 style="font-size: 20px; color: #1a1a2e;">TOTAL RECAUDADO (CAJA)</h2>
+                <span style="font-size: 28px; font-weight: 800; color: #D4AF37;">S/ ${reporte.totalVentas.toFixed(2)}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -351,7 +420,7 @@ const Reportes = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Botones de descarga */}
             <div className="flex flex-col gap-2">
               <p className="text-sm text-gray-400 mb-1">Descargar Reporte</p>
@@ -393,39 +462,39 @@ const Reportes = () => {
               </div>
             </div>
           </div>
-          
+
           <div className="card-sparta p-6">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 bg-green-500/20 rounded-lg flex items-center justify-center">
                 <Calendar className="w-7 h-7 text-green-500" />
               </div>
               <div>
-                <p className="text-sm text-gray-400">Por Membresías</p>
+                <p className="text-sm text-gray-400">Membresías</p>
                 <p className="text-2xl font-bold text-green-500">S/ {reporte.totalPagos.toFixed(2)}</p>
               </div>
             </div>
           </div>
-          
+
           <div className="card-sparta p-6">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 bg-blue-500/20 rounded-lg flex items-center justify-center">
                 <TrendingUp className="w-7 h-7 text-blue-500" />
               </div>
               <div>
-                <p className="text-sm text-gray-400">Por Productos</p>
+                <p className="text-sm text-gray-400">Ventas (Caja)</p>
                 <p className="text-2xl font-bold text-blue-500">S/ {reporte.totalVentas.toFixed(2)}</p>
               </div>
             </div>
           </div>
-          
+
           <div className="card-sparta p-6">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                <BarChart3 className="w-7 h-7 text-purple-500" />
+              <div className="w-14 h-14 bg-orange-500/20 rounded-lg flex items-center justify-center">
+                <AlertTriangle className="w-7 h-7 text-orange-500" />
               </div>
               <div>
-                <p className="text-sm text-gray-400">Transacciones</p>
-                <p className="text-2xl font-bold text-purple-500">{reporte.pagos.length + reporte.ventas.length}</p>
+                <p className="text-sm text-gray-400">Fiados (Deuda)</p>
+                <p className="text-2xl font-bold text-orange-500">S/ {reporte.totalFiadoGenerado?.toFixed(2) || '0.00'}</p>
               </div>
             </div>
           </div>
@@ -447,13 +516,14 @@ const Reportes = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                   <XAxis dataKey="fecha" stroke="#888" tick={{ fontSize: 12 }} />
                   <YAxis stroke="#888" tick={{ fontSize: 12 }} />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #D4AF37', borderRadius: '8px' }}
                     labelStyle={{ color: '#D4AF37' }}
                   />
-                  <Legend />
+                  <Legend verticalAlign="top" height={36} />
                   <Bar dataKey="pagos" name="Membresías" fill="#D4AF37" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="ventas" name="Productos" fill="#CD7F32" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="ventas" name="Efectivo" fill="#CD7F32" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="fiados" name="Fiados" fill="#FF5733" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -488,7 +558,7 @@ const Reportes = () => {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #D4AF37', borderRadius: '8px' }}
                     formatter={(value) => [`S/ ${value.toFixed(2)}`, 'Monto']}
                   />
@@ -529,9 +599,8 @@ const Reportes = () => {
                     <tr key={index}>
                       <td className="text-white">{pago.clienteNombre}</td>
                       <td>
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          pago.tipo === 'mensual' ? 'bg-green-500/20 text-green-500' : 'bg-blue-500/20 text-blue-500'
-                        }`}>
+                        <span className={`px-2 py-1 rounded-full text-xs ${pago.tipo === 'mensual' ? 'bg-green-500/20 text-green-500' : 'bg-blue-500/20 text-blue-500'
+                          }`}>
                           {pago.tipo}
                         </span>
                       </td>
@@ -563,8 +632,28 @@ const Reportes = () => {
             transition={{ delay: 0.5 }}
             className="card-sparta overflow-hidden"
           >
-            <div className="p-4 border-b border-sparta-gold/20">
+            <div className="p-4 border-b border-sparta-gold/20 flex items-center justify-between gap-4">
               <h3 className="font-sparta text-lg font-bold text-sparta-gold">Detalle de Ventas</h3>
+              <div className="flex bg-sparta-darker p-1 rounded-lg border border-white/5">
+                <button
+                  onClick={() => setFiltroVenta('todos')}
+                  className={`px-3 py-1 text-[10px] uppercase font-bold rounded transition-all ${filtroVenta === 'todos' ? 'bg-sparta-gold text-sparta-dark' : 'text-gray-400 hover:text-white'}`}
+                >
+                  Todos
+                </button>
+                <button
+                  onClick={() => setFiltroVenta('productos')}
+                  className={`px-3 py-1 text-[10px] uppercase font-bold rounded transition-all ${filtroVenta === 'productos' ? 'bg-sparta-gold text-sparta-dark' : 'text-gray-400 hover:text-white'}`}
+                >
+                  Ventas
+                </button>
+                <button
+                  onClick={() => setFiltroVenta('cobros')}
+                  className={`px-3 py-1 text-[10px] uppercase font-bold rounded transition-all ${filtroVenta === 'cobros' ? 'bg-sparta-gold text-sparta-dark' : 'text-gray-400 hover:text-white'}`}
+                >
+                  Cobros
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
               <table className="table-sparta">
@@ -576,27 +665,87 @@ const Reportes = () => {
                     <th>Total</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {reporte.ventas.length > 0 ? reporte.ventas.map((venta, index) => (
-                    <tr key={index}>
-                      <td className="text-white">{venta.productoNombre}</td>
-                      <td className="text-gray-400">{venta.cantidad}</td>
-                      <td className="text-gray-400">{venta.fecha}</td>
-                      <td className="text-sparta-gold font-semibold">S/ {venta.total.toFixed(2)}</td>
-                    </tr>
-                  )) : (
-                    <tr>
-                      <td colSpan={4} className="text-center py-8 text-gray-400">
-                        No hay ventas en este periodo
-                      </td>
-                    </tr>
+                <tbody className="divide-y divide-white/5">
+                  {/* Sección: Ventas */}
+                  {(filtroVenta === 'todos' || filtroVenta === 'productos') && (
+                    <>
+                      <tr className="bg-white/5">
+                        <td colSpan={4} className="py-2 px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                          Movimiento de Productos
+                        </td>
+                      </tr>
+                      {reporte.ventas.length > 0 ? reporte.ventas.map((venta, index) => (
+                        <tr key={index}>
+                          <td className="text-white">
+                            <div className="flex flex-col">
+                              <span>{venta.productoNombre}</span>
+                              {venta.metodo_pago === 'fiado' ? (
+                                <span className="text-[10px] text-orange-400 font-bold uppercase tracking-tighter">● A Crédito</span>
+                              ) : (
+                                <span className="text-[10px] text-green-500/70 font-bold uppercase tracking-tighter">● En Efectivo</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="text-gray-400">{venta.cantidad}</td>
+                          <td className="text-gray-400">{venta.fecha}</td>
+                          <td className="text-sparta-gold font-semibold">S/ {venta.total.toFixed(2)}</td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={4} className="text-center py-8 text-gray-400">
+                            No hay ventas en este periodo
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )}
+
+                  {/* Sección: Cobros */}
+                  {(filtroVenta === 'todos' || filtroVenta === 'cobros') && (
+                    <>
+                      {reporte.pagosProductos?.length > 0 && (
+                        <tr className="bg-sparta-gold/10">
+                          <td colSpan={4} className="py-2 px-4 text-[10px] font-bold text-sparta-gold uppercase tracking-widest">
+                            Cobros de Deudas (Fiados)
+                          </td>
+                        </tr>
+                      )}
+                      {reporte.pagosProductos?.map((pago, index) => (
+                        <tr key={`pago-${index}`} className="bg-sparta-gold/5">
+                          <td className="text-white">
+                            <div className="flex flex-col">
+                              <span className="text-sparta-gold font-bold">Cobro de Fiado</span>
+                              <span className="text-[10px] text-gray-400 italic">{pago.clienteNombre}</span>
+                            </div>
+                          </td>
+                          <td className="text-gray-400">-</td>
+                          <td className="text-gray-400">{pago.fecha}</td>
+                          <td className="text-green-500 font-bold">S/ {pago.monto.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      {reporte.pagosProductos?.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="text-center py-8 text-gray-400">
+                            No hay cobros en este periodo
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   )}
                 </tbody>
               </table>
             </div>
-            <div className="p-4 border-t border-sparta-gold/20 bg-sparta-darker">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Total Ventas:</span>
+            <div className="p-4 border-t border-sparta-gold/20 bg-sparta-darker space-y-2">
+              <div className="flex justify-between items-center text-xs text-gray-400">
+                <span>Ventas Directas (Efectivo):</span>
+                <span>S/ {(reporte.totalVentasEfectivo || 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-gray-400">
+                <span>Cobros de Fiados:</span>
+                <span>S/ {(reporte.totalAbonosProductos || 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-white/5">
+                <span className="font-bold text-white text-sm">TOTAL RECAUDADO (CAJA):</span>
                 <span className="text-xl font-bold text-sparta-gold">S/ {reporte.totalVentas.toFixed(2)}</span>
               </div>
             </div>

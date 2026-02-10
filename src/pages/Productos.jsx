@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Package, Plus, Search, Edit, Trash2, X, ShoppingCart, AlertTriangle, Tag, Settings } from 'lucide-react'
 import { useData } from '../context/DataContext'
@@ -21,6 +21,8 @@ const Productos = () => {
   const [productoEditando, setProductoEditando] = useState(null)
   const [productoVenta, setProductoVenta] = useState(null)
   const [cantidadVenta, setCantidadVenta] = useState(1)
+  const [metodoPagoVenta, setMetodoPagoVenta] = useState('efectivo')
+  const [clienteIdVenta, setClienteIdVenta] = useState('')
   const [nuevaCategoria, setNuevaCategoria] = useState('')
   const [formData, setFormData] = useState({
     nombre: '',
@@ -28,6 +30,15 @@ const Productos = () => {
     stock: '',
     categoria: 'Bebidas'
   })
+
+  // Estados para paginación de ventas
+  const [paginaActual, setPaginaActual] = useState(1)
+  const itemsPorPagina = 10
+
+  // Resetear a página 1 al buscar o filtrar
+  useEffect(() => {
+    setPaginaActual(1)
+  }, [busqueda, filtroCategoria])
 
   // Categorías desde BD + las que existan en productos
   const categoriasBase = ['Bebidas', 'Suplementos', 'Snacks', 'Accesorios']
@@ -65,6 +76,8 @@ const Productos = () => {
   const abrirModalVenta = (producto) => {
     setProductoVenta(producto)
     setCantidadVenta(1)
+    setMetodoPagoVenta('efectivo')
+    setClienteIdVenta('')
     setModalVenta(true)
   }
 
@@ -74,6 +87,8 @@ const Productos = () => {
     setModalCategoria(false)
     setProductoEditando(null)
     setProductoVenta(null)
+    setMetodoPagoVenta('efectivo')
+    setClienteIdVenta('')
     setNuevaCategoria('')
   }
 
@@ -110,7 +125,7 @@ const Productos = () => {
       stock: parseInt(formData.stock),
       categoria: formData.categoria
     }
-    
+
     if (productoEditando) {
       await editarProducto(productoEditando.id, datos)
       toast.success('¡Producto Actualizado!', `${datos.nombre} ha sido actualizado`)
@@ -127,9 +142,16 @@ const Productos = () => {
 
   const handleVenta = async () => {
     if (productoVenta && cantidadVenta > 0) {
-      const resultado = await venderProducto(productoVenta.id, cantidadVenta)
+      if (metodoPagoVenta === 'fiado' && !clienteIdVenta) {
+        toast.error('Error', 'Debes seleccionar un cliente para ventas al fiado')
+        return
+      }
+
+      const resultado = await venderProducto(productoVenta.id, cantidadVenta, clienteIdVenta || null, metodoPagoVenta)
       if (resultado) {
-        toast.success('¡Venta Realizada!', `${cantidadVenta}x ${productoVenta.nombre} - Total: S/${(productoVenta.precio * cantidadVenta).toFixed(2)}`)
+        const total = (productoVenta.precio * cantidadVenta).toFixed(2)
+        const msj = metodoPagoVenta === 'fiado' ? `Venta al FIADO registrada - Total: S/${total}` : `Venta Realizada - Total: S/${total}`
+        toast.success('¡Hecho!', msj)
       } else {
         toast.error('Error', 'No se pudo completar la venta')
       }
@@ -179,7 +201,7 @@ const Productos = () => {
                     <AlertTriangle className="w-5 h-5 text-red-500" />
                     <h4 className="font-semibold text-red-500">Stock Bajo ({productosBajoStock.length})</h4>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setMostrarAlertaStock(false)}
                     className="text-gray-400 hover:text-white"
                   >
@@ -221,7 +243,7 @@ const Productos = () => {
             </h1>
             <p className="text-gray-400">Gestiona el inventario y las ventas</p>
           </div>
-          
+
           <button
             onClick={abrirModalNuevo}
             className="sparta-button flex items-center gap-2"
@@ -301,15 +323,14 @@ const Productos = () => {
               className="input-sparta pl-12"
             />
           </div>
-          
+
           <div className="flex gap-2 flex-wrap items-center">
             <button
               onClick={() => setFiltroCategoria('todas')}
-              className={`px-4 py-2 rounded-lg transition-all ${
-                filtroCategoria === 'todas' 
-                  ? 'bg-sparta-gold text-sparta-darker' 
-                  : 'bg-sparta-dark text-gray-400 hover:text-white'
-              }`}
+              className={`px-4 py-2 rounded-lg transition-all ${filtroCategoria === 'todas'
+                ? 'bg-sparta-gold text-sparta-darker'
+                : 'bg-sparta-dark text-gray-400 hover:text-white'
+                }`}
             >
               Todas
             </button>
@@ -317,11 +338,10 @@ const Productos = () => {
               <button
                 key={cat}
                 onClick={() => setFiltroCategoria(cat)}
-                className={`px-4 py-2 rounded-lg transition-all ${
-                  filtroCategoria === cat 
-                    ? 'bg-sparta-gold text-sparta-darker' 
-                    : 'bg-sparta-dark text-gray-400 hover:text-white'
-                }`}
+                className={`px-4 py-2 rounded-lg transition-all ${filtroCategoria === cat
+                  ? 'bg-sparta-gold text-sparta-darker'
+                  : 'bg-sparta-dark text-gray-400 hover:text-white'
+                  }`}
               >
                 {cat}
               </button>
@@ -346,27 +366,25 @@ const Productos = () => {
           {productosFiltrados.length > 0 ? productosFiltrados.map((producto) => (
             <div key={producto.id} className="card-sparta p-4">
               <div className="flex items-start justify-between mb-3">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                  producto.categoria === 'Bebidas' ? 'bg-blue-500/20' :
+                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${producto.categoria === 'Bebidas' ? 'bg-blue-500/20' :
                   producto.categoria === 'Suplementos' ? 'bg-purple-500/20' :
-                  producto.categoria === 'Snacks' ? 'bg-orange-500/20' :
-                  'bg-green-500/20'
-                }`}>
-                  <Package className={`w-6 h-6 ${
-                    producto.categoria === 'Bebidas' ? 'text-blue-500' :
+                    producto.categoria === 'Snacks' ? 'bg-orange-500/20' :
+                      'bg-green-500/20'
+                  }`}>
+                  <Package className={`w-6 h-6 ${producto.categoria === 'Bebidas' ? 'text-blue-500' :
                     producto.categoria === 'Suplementos' ? 'text-purple-500' :
-                    producto.categoria === 'Snacks' ? 'text-orange-500' :
-                    'text-green-500'
-                  }`} />
+                      producto.categoria === 'Snacks' ? 'text-orange-500' :
+                        'text-green-500'
+                    }`} />
                 </div>
                 <span className="px-2 py-1 bg-sparta-gold/20 text-sparta-gold text-xs rounded-full">
                   {producto.categoria}
                 </span>
               </div>
-              
+
               <h3 className="font-semibold text-white mb-1">{producto.nombre}</h3>
               <p className="text-2xl font-bold text-sparta-gold mb-2">S/ {producto.precio.toFixed(2)}</p>
-              
+
               <div className="flex items-center justify-between mb-4">
                 <span className={`text-sm ${producto.stock < 10 ? 'text-red-500' : 'text-gray-400'}`}>
                   Stock: {producto.stock} unidades
@@ -375,16 +393,15 @@ const Productos = () => {
                   <AlertTriangle className="w-4 h-4 text-red-500" />
                 )}
               </div>
-              
+
               <div className="flex gap-2">
                 <button
                   onClick={() => abrirModalVenta(producto)}
                   disabled={producto.stock === 0}
-                  className={`flex-1 py-2 rounded flex items-center justify-center gap-1 transition-all ${
-                    producto.stock === 0 
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
-                      : 'bg-green-500/20 text-green-500 hover:bg-green-500/30'
-                  }`}
+                  className={`flex-1 py-2 rounded flex items-center justify-center gap-1 transition-all ${producto.stock === 0
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-green-500/20 text-green-500 hover:bg-green-500/30'
+                    }`}
                 >
                   <ShoppingCart className="w-4 h-4" />
                   Vender
@@ -419,27 +436,68 @@ const Productos = () => {
         >
           <h2 className="font-sparta text-xl font-bold text-sparta-gold mb-4">Historial de Ventas</h2>
           <div className="card-sparta overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="table-sparta">
-                <thead>
+            <div className="overflow-x-auto w-full">
+              <table className="table-sparta border-collapse">
+                <thead className="bg-sparta-dark z-10">
                   <tr>
                     <th>Producto</th>
+                    <th>Cliente</th>
                     <th>Cantidad</th>
                     <th>Fecha</th>
+                    <th>Método</th>
                     <th>Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ventas.length > 0 ? ventas.slice().reverse().map((venta) => (
-                    <tr key={venta.id}>
-                      <td className="font-medium text-white">{venta.productoNombre}</td>
-                      <td className="text-gray-300">{venta.cantidad}</td>
-                      <td className="text-gray-300">{venta.fecha}</td>
-                      <td className="text-sparta-gold font-bold">S/ {venta.total.toFixed(2)}</td>
-                    </tr>
-                  )) : (
+                  {ventas.length > 0 ? (() => {
+                    const ventasOrdenadas = [...ventas]
+                    const totalPaginas = Math.ceil(ventasOrdenadas.length / itemsPorPagina)
+                    const inicio = (paginaActual - 1) * itemsPorPagina
+                    const ventasPagina = ventasOrdenadas.slice(inicio, inicio + itemsPorPagina)
+
+                    return (
+                      <>
+                        {ventasPagina.map((venta) => (
+                          <tr key={venta.id}>
+                            <td className="font-medium text-white">{venta.productoNombre}</td>
+                            <td className="text-gray-300">{venta.clienteNombre || 'General'}</td>
+                            <td className="text-gray-300">{venta.cantidad}</td>
+                            <td className="text-gray-400 text-sm">{venta.fecha}</td>
+                            <td className="text-gray-300">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase transition-all ${venta.metodo_pago === 'fiado' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/20' : 'bg-green-500/20 text-green-400 border border-green-500/20'
+                                }`}>
+                                {venta.metodo_pago || 'efectivo'}
+                              </span>
+                            </td>
+                            <td className="text-sparta-gold font-bold">S/ {venta.total.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                        {/* Paginación */}
+                        {totalPaginas > 1 && (
+                          <tr>
+                            <td colSpan={6} className="p-4 border-t border-white/5">
+                              <div className="flex items-center justify-center gap-2">
+                                {[...Array(totalPaginas)].map((_, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => setPaginaActual(i + 1)}
+                                    className={`w-10 h-10 rounded-lg font-bold transition-all ${paginaActual === i + 1
+                                      ? 'bg-sparta-gold text-sparta-dark scale-110 shadow-lg shadow-sparta-gold/20'
+                                      : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                      }`}
+                                  >
+                                    {i + 1}
+                                  </button>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    )
+                  })() : (
                     <tr>
-                      <td colSpan={4} className="text-center py-8 text-gray-400">
+                      <td colSpan={6} className="text-center py-12 text-gray-500 italic">
                         No hay ventas registradas
                       </td>
                     </tr>
@@ -607,10 +665,44 @@ const Productos = () => {
                     />
                   </div>
 
-                  <div className="card-sparta p-4 bg-sparta-gold/10 border-sparta-gold">
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Método de Pago</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setMetodoPagoVenta('efectivo')}
+                        className={`py-2 rounded transition-all ${metodoPagoVenta === 'efectivo' ? 'bg-sparta-gold text-sparta-darker' : 'bg-sparta-dark text-gray-400'}`}
+                      >
+                        Efectivo
+                      </button>
+                      <button
+                        onClick={() => setMetodoPagoVenta('fiado')}
+                        className={`py-2 rounded transition-all ${metodoPagoVenta === 'fiado' ? 'bg-orange-500 text-white' : 'bg-sparta-dark text-gray-400'}`}
+                      >
+                        Fiado
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">
+                      Cliente {metodoPagoVenta === 'fiado' && <span className="text-red-500">*</span>}
+                    </label>
+                    <select
+                      value={clienteIdVenta}
+                      onChange={(e) => setClienteIdVenta(e.target.value)}
+                      className="input-sparta"
+                    >
+                      <option value="">Seleccionar cliente...</option>
+                      {useData().clientes.map(c => (
+                        <option key={c.id} value={c.id}>{c.nombre} (DNI: {c.dni})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={`card-sparta p-4 border-sparta-gold ${metodoPagoVenta === 'fiado' ? 'bg-orange-500/10 border-orange-500' : 'bg-sparta-gold/10'}`}>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-300">Total a cobrar:</span>
-                      <span className="text-2xl font-bold text-sparta-gold">
+                      <span className="text-gray-300">{metodoPagoVenta === 'fiado' ? 'Total Deudado:' : 'Total a cobrar:'}</span>
+                      <span className={`text-2xl font-bold ${metodoPagoVenta === 'fiado' ? 'text-orange-500' : 'text-sparta-gold'}`}>
                         S/ {(productoVenta.precio * cantidadVenta).toFixed(2)}
                       </span>
                     </div>

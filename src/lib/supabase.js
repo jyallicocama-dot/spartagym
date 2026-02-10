@@ -162,7 +162,7 @@ export const productosService = {
       .select('stock')
       .eq('id', id)
       .single()
-    
+
     const { data, error } = await supabase
       .from('productos')
       .update({ stock: producto.stock - cantidad })
@@ -209,6 +209,86 @@ export const ventasService = {
       .select()
       .single()
     if (error) throw error
+    return data
+  },
+
+  async updateEstadoPago(id, estado) {
+    const { data, error } = await supabase
+      .from('ventas')
+      .update({ estado_pago: estado })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  }
+}
+
+// ============= DEUDAS =============
+export const deudasService = {
+  async getPendientes() {
+    const { data, error } = await supabase
+      .from('ventas')
+      .select(`
+        *,
+        clientes (id, nombre, dni),
+        productos (id, nombre)
+      `)
+      .eq('estado_pago', 'pendiente')
+      .order('fecha', { ascending: false })
+    if (error) throw error
+    return data
+  },
+
+  async getPorCliente(clienteId) {
+    const { data, error } = await supabase
+      .from('ventas')
+      .select(`
+        *,
+        productos (id, nombre)
+      `)
+      .eq('cliente_id', clienteId)
+      .eq('estado_pago', 'pendiente')
+      .order('fecha', { ascending: false })
+    if (error) throw error
+    return data
+  },
+
+  async pagarDeuda(ventaId, metodo_pago = 'efectivo') {
+    // 1. Obtener la venta para saber el monto y cliente
+    const { data: venta, error: fetchError } = await supabase
+      .from('ventas')
+      .select('*')
+      .eq('id', ventaId)
+      .single()
+
+    if (fetchError) throw fetchError
+
+    // 2. Crear el registro en Pagos
+    const nuevoPago = {
+      cliente_id: venta.cliente_id,
+      tipo: 'producto',
+      monto: venta.total,
+      metodo_pago: metodo_pago,
+      fecha: new Date().toISOString(),
+      notas: `Pago de deuda por venta ID: ${ventaId}`
+    }
+
+    const { error: pagoError } = await supabase
+      .from('pagos')
+      .insert([nuevoPago])
+
+    if (pagoError) throw pagoError
+
+    // 3. Marcar la venta como pagada
+    const { data, error: updateError } = await supabase
+      .from('ventas')
+      .update({ estado_pago: 'pagado' })
+      .eq('id', ventaId)
+      .select()
+      .single()
+
+    if (updateError) throw updateError
     return data
   }
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Dumbbell, Users, CreditCard, Package, BarChart3, Home, Shield, LogOut } from 'lucide-react'
+import { Menu, X, Dumbbell, Users, CreditCard, Package, BarChart3, Home, Shield, LogOut, DollarSign } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 
@@ -46,6 +46,7 @@ const Navbar = () => {
     { name: 'Clientes', path: '/intranet/clientes', icon: Users },
     { name: 'Suscripciones', path: '/intranet/suscripciones', icon: CreditCard },
     { name: 'Productos', path: '/intranet/productos', icon: Package },
+    { name: 'Fiados', path: '/intranet/deudas', icon: DollarSign },
     { name: 'Reportes', path: '/intranet/reportes', icon: BarChart3 },
   ]
 
@@ -81,18 +82,17 @@ const Navbar = () => {
                 <Link
                   key={link.path}
                   to={link.path}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-300 ${
-                    location.pathname === link.path
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-300 ${location.pathname === link.path
                       ? 'bg-sparta-gold/20 text-sparta-gold'
                       : 'text-gray-300 hover:text-sparta-gold hover:bg-sparta-gold/10'
-                  }`}
+                    }`}
                 >
                   <link.icon className="w-4 h-4" />
                   <span className="text-sm font-medium">{link.name}</span>
                 </Link>
               )
             ))}
-            
+
             {!isIntranet && (
               <Link
                 to="/login"
@@ -102,7 +102,7 @@ const Navbar = () => {
                 <span>Intranet</span>
               </Link>
             )}
-            
+
             {isIntranet && (
               <div className="flex items-center gap-3 ml-4">
                 <span className="text-sm text-gray-400">
@@ -152,18 +152,17 @@ const Navbar = () => {
                     key={link.path}
                     to={link.path}
                     onClick={() => setIsOpen(false)}
-                    className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-300 ${
-                      location.pathname === link.path
+                    className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-300 ${location.pathname === link.path
                         ? 'bg-sparta-gold/20 text-sparta-gold'
                         : 'text-gray-300 hover:text-sparta-gold'
-                    }`}
+                      }`}
                   >
                     <link.icon className="w-5 h-5" />
                     <span>{link.name}</span>
                   </Link>
                 )
               ))}
-              
+
               {!isIntranet && (
                 <Link
                   to="/login"

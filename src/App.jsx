@@ -8,6 +8,7 @@ import Clientes from './pages/Clientes'
 import Suscripciones from './pages/Suscripciones'
 import Productos from './pages/Productos'
 import Reportes from './pages/Reportes'
+import Deudas from './pages/Deudas'
 import { DataProvider } from './context/DataContext'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
@@ -27,6 +28,7 @@ function AppContent() {
         <Route path="/intranet/suscripciones" element={<ProtectedRoute><Suscripciones /></ProtectedRoute>} />
         <Route path="/intranet/productos" element={<ProtectedRoute><Productos /></ProtectedRoute>} />
         <Route path="/intranet/reportes" element={<ProtectedRoute><Reportes /></ProtectedRoute>} />
+        <Route path="/intranet/deudas" element={<ProtectedRoute><Deudas /></ProtectedRoute>} />
       </Routes>
     </div>
   )

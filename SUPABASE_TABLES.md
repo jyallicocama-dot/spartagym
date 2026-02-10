@@ -11,6 +11,7 @@ CREATE TABLE clientes (
   email VARCHAR(255),
   fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   estado VARCHAR(20) DEFAULT 'activo' CHECK (estado IN ('activo', 'inactivo', 'suspendido')),
+  user_id UUID DEFAULT auth.uid() REFERENCES auth.users(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -42,9 +43,9 @@ CREATE INDEX idx_clientes_fecha_registro ON clientes(fecha_registro);
 CREATE TABLE pagos (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
-  tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('mensual', 'diario')),
+  tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('mensual', 'diario', 'producto')),
   monto DECIMAL(10,2) NOT NULL,
-  mes VARCHAR(50), -- Ej: "Enero 2024" (null para pagos diarios)
+  mes VARCHAR(50), -- Ej: "Enero 2024" (null para pagos diarios o productos)
   fecha TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   metodo_pago VARCHAR(50) DEFAULT 'efectivo',
   notas TEXT,
@@ -63,7 +64,7 @@ CREATE INDEX idx_pagos_mes ON pagos(mes);
 |-------|------|-------------|
 | id | UUID | Identificador único |
 | cliente_id | UUID | Referencia al cliente |
-| tipo | VARCHAR(20) | Tipo de pago: mensual o diario |
+| tipo | VARCHAR(20) | Tipo: mensual, diario o producto (cobro fiado) |
 | monto | DECIMAL(10,2) | Monto del pago (80 mensual, 5 diario) |
 | mes | VARCHAR(50) | Mes pagado (solo para mensuales) |
 | fecha | TIMESTAMP | Fecha del pago |
@@ -122,9 +123,12 @@ CREATE TABLE ventas (
   cantidad INTEGER NOT NULL CHECK (cantidad > 0),
   precio_unitario DECIMAL(10,2) NOT NULL,
   total DECIMAL(10,2) NOT NULL,
+  monto_pagado DECIMAL(10,2) DEFAULT 0, -- Para pagos parciales de fiados
+  estado_pago VARCHAR(20) DEFAULT 'pagado' CHECK (estado_pago IN ('pagado', 'pendiente')),
   fecha TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   cliente_id UUID REFERENCES clientes(id) ON DELETE SET NULL, -- Opcional
   metodo_pago VARCHAR(50) DEFAULT 'efectivo',
+  user_id UUID DEFAULT auth.uid() REFERENCES auth.users(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -142,9 +146,11 @@ CREATE INDEX idx_ventas_cliente_id ON ventas(cliente_id);
 | cantidad | INTEGER | Cantidad vendida |
 | precio_unitario | DECIMAL(10,2) | Precio por unidad al momento de venta |
 | total | DECIMAL(10,2) | Total de la venta (cantidad * precio) |
+| monto_pagado | DECIMAL(10,2) | Cantidad ya pagada (usado en fiados) |
+| estado_pago | VARCHAR(20) | Estado: pagado o pendiente |
 | fecha | TIMESTAMP | Fecha de la venta |
 | cliente_id | UUID | Cliente (opcional) |
-| metodo_pago | VARCHAR(50) | Método de pago |
+| metodo_pago | VARCHAR(50) | Método de pago (efectivo, fiado, etc) |
 | created_at | TIMESTAMP | Fecha de creación |
 
 ---
@@ -242,17 +248,18 @@ ALTER TABLE productos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ventas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
 
--- Política: Solo usuarios autenticados pueden leer/escribir
-CREATE POLICY "Usuarios autenticados pueden ver clientes" ON clientes
-  FOR SELECT USING (auth.role() = 'authenticated');
+-- Política: Solo el dueño ve y modifica sus propios datos
+CREATE POLICY "Usuarios ven sus propios clientes" ON clientes
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Usuarios autenticados pueden insertar clientes" ON clientes
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Usuarios ven sus propios pagos" ON pagos
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Usuarios autenticados pueden actualizar clientes" ON clientes
-  FOR UPDATE USING (auth.role() = 'authenticated');
-  
--- Repetir para las demás tablas según necesidades
+CREATE POLICY "Usuarios ven sus propios productos" ON productos
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Usuarios ven sus propias ventas" ON ventas
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 ```
 
 ---
@@ -279,7 +286,7 @@ CREATE TABLE IF NOT EXISTS clientes (
 CREATE TABLE IF NOT EXISTS pagos (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
-  tipo VARCHAR(20) NOT NULL,
+  tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('mensual', 'diario', 'producto')),
   monto DECIMAL(10,2) NOT NULL,
   mes VARCHAR(50),
   fecha TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -310,6 +317,8 @@ CREATE TABLE IF NOT EXISTS ventas (
   cantidad INTEGER NOT NULL,
   precio_unitario DECIMAL(10,2) NOT NULL,
   total DECIMAL(10,2) NOT NULL,
+  monto_pagado DECIMAL(10,2) DEFAULT 0,
+  estado_pago VARCHAR(20) DEFAULT 'pagado' CHECK (estado_pago IN ('pagado', 'pendiente')),
   fecha TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   cliente_id UUID REFERENCES clientes(id) ON DELETE SET NULL,
   metodo_pago VARCHAR(50) DEFAULT 'efectivo',
